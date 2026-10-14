@@ -1,13 +1,14 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+requires = ["setuptools>=77.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "wsidrift"
-version = "0.1.0"
+version = "0.1.1"
 description = "Label-free validity monitor for computational pathology pipelines"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{name = "Abhishek Thakur", email = "a.thakur5690@gmail.com"}]
 requires-python = ">=3.10"
 keywords = [
@@ -15,10 +16,9 @@ keywords = [
     "whole-slide-image", "computational-pathology", "domain-shift"
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Science/Research",
     "Intended Audience :: Healthcare Industry",
-    "License :: OSI Approved :: MIT License",
     "Topic :: Scientific/Engineering :: Medical Science Apps.",
 ]
 dependencies = [

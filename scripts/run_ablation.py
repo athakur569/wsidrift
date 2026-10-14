@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""E1-E9 ablation runner — trains all nine stain-handling conditions and logs ΔG.
+"""E1-E9 ablation runner — skeleton only. Training is NOT implemented; run_condition raises.
 
 Usage:
     python scripts/run_ablation.py --config configs/ablation.yaml --cohort BRCA
@@ -54,11 +54,11 @@ class ConditionResult:
 
 
 def run_condition(condition: str, config: dict, cohort: str, seed: int) -> dict:
-    """Placeholder — replaced by real training + evaluation loop."""
-    rng = np.random.default_rng(seed + hash(condition + cohort) % 10000)
-    auc_in = float(rng.uniform(0.70, 0.92))
-    auc_cross = float(rng.uniform(0.60, auc_in))
-    return {"auc_in": auc_in, "auc_cross": auc_cross}
+    """Train and evaluate one condition. Not implemented yet: needs the frozen patch set."""
+    raise NotImplementedError(
+        "E1-E9 training is not implemented. This runner produces no results until the "
+        "real training and evaluation loop exists."
+    )
 
 
 def main() -> None:

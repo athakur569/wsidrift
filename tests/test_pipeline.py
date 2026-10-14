@@ -19,45 +19,51 @@ def _make_logits(n: int, n_classes: int = 2, seed: int = 0):
 
 
 class TestMonitorPipeline:
-    def test_fit_and_score_no_shift(self):
-        ref = _make_embeddings(200, seed=0)
-        dep = _make_embeddings(100, seed=1)
-        logits = _make_logits(100, seed=1)
-        pipe = MonitorPipeline()
-        pipe.fit(ref)
-        result = pipe.score(dep, logits)
-        assert hasattr(result, "invalid")
+    def test_no_shift_not_invalid(self):
+        pipe = MonitorPipeline(n_permutations=99).fit(
+            _make_embeddings(200, d=16, seed=0), reference_logits=_make_logits(200, seed=0)
+        )
+        result = pipe.score(_make_embeddings(100, d=16, seed=1), logits=_make_logits(100, seed=1))
         assert isinstance(result.invalid, bool)
+        assert not result.invalid
 
     def test_large_shift_flags_invalid(self):
-        ref = _make_embeddings(200, seed=0, shift=0.0)
-        dep = _make_embeddings(100, seed=2, shift=5.0)
-        logits = _make_logits(100, seed=2)
-        pipe = MonitorPipeline(t1_mmd_threshold=0.1, t2_mahal_threshold=1.0)
-        pipe.fit(ref)
-        result = pipe.score(dep, logits)
-        assert result.tier1.flagged or result.tier2.flagged
+        pipe = MonitorPipeline(n_permutations=99).fit(_make_embeddings(200, d=16, seed=0))
+        result = pipe.score(_make_embeddings(100, d=16, seed=2, shift=5.0))
+        assert result.tier1.flagged and result.tier2.flagged and result.invalid
+
+    def test_separate_features_and_embeddings(self):
+        feats_ref, emb_ref = _make_embeddings(150, d=8, seed=0), _make_embeddings(150, d=32, seed=1)
+        pipe = MonitorPipeline(n_permutations=99).fit(feats_ref, reference_embeddings=emb_ref)
+        # Input shift only: Tier 1 flags, Tier 2 doesn't, so the conjunction stays valid.
+        result = pipe.score(
+            _make_embeddings(80, d=8, seed=2, shift=3.0), embeddings=_make_embeddings(80, d=32, seed=3)
+        )
+        assert result.tier1.flagged and not result.tier2.flagged and not result.invalid
+
+    def test_fixed_thresholds_still_supported(self):
+        pipe = MonitorPipeline(t1_mmd_threshold=0.1, t1_wass_threshold=0.5, t2_maha_threshold=1.0)
+        pipe.fit(_make_embeddings(200, d=16, seed=0))
+        result = pipe.score(_make_embeddings(100, d=16, seed=2, shift=5.0))
+        assert result.tier1.threshold_mmd == 0.1 and result.invalid
 
     def test_summary_keys(self):
-        ref = _make_embeddings(100, seed=0)
-        dep = _make_embeddings(50, seed=3)
-        logits = _make_logits(50, seed=3)
-        pipe = MonitorPipeline()
-        pipe.fit(ref)
-        s = pipe.score(dep, logits).summary()
-        assert "t1_mmd" in s and "invalid" in s
+        pipe = MonitorPipeline(n_permutations=49).fit(_make_embeddings(100, d=16, seed=0))
+        s = pipe.score(_make_embeddings(50, d=16, seed=3)).summary()
+        assert {"t1_mmd", "t1_p_mmd", "t2_mahalanobis_threshold", "invalid"} <= s.keys()
 
 
 class TestDeltaGap:
     def test_positive_delta_gap(self):
-        rng = np.random.default_rng(42)
-        y = np.array([0, 0, 1, 1, 0, 1])
+        # In-domain scores separate the classes perfectly; cross-domain scores misrank some cases.
+        y = np.array([0, 0, 0, 1, 1, 1])
+        s_in = np.array([0.1, 0.2, 0.3, 0.7, 0.8, 0.9])
+        s_cross = np.array([0.1, 0.6, 0.3, 0.5, 0.8, 0.2])
         dg = DeltaGap("E1", "BRCA")
         for _ in range(3):
-            s_in = rng.uniform(0.7, 0.9, size=6)
-            s_cross = s_in - rng.uniform(0.05, 0.15, size=6)
-            dg.add_seed(y, s_in, y, np.clip(s_cross, 0, 1))
+            dg.add_seed(y, s_in, y, s_cross)
         result = dg.compute()
+        assert result.auc_in_mean == 1.0
         assert result.delta_gap_mean > 0
 
     def test_str_output(self):

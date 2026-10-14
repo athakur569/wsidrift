@@ -1,0 +1,26 @@
+# Changelog
+
+## 0.1.1 — pre-alpha
+
+### Fixed
+- `MonitorPipeline` crashed on every call: it passed argument names the monitors don't accept and used a `ValidityMonitor` API that doesn't exist. Rebuilt on the current classes.
+- Energy score flagged the wrong tail. Out-of-distribution inputs have **higher** energy (Liu et al. 2020); the flag now fires when batch energy exceeds the threshold. A fixed `energy_threshold` now means "flag above".
+- Tier 2 no longer invents all-zero logits when none are given. Energy is only used when reference logits were supplied at `fit()`, or when a fixed energy threshold is set.
+
+### Changed
+- **Thresholds are calibrated by default** at false-alarm rate `alpha` (default 0.05), replacing fixed guesses that false-alarmed on clean data:
+  - Tier 1: permutation two-sample test on MMD² and Wasserstein, α/2 each. Results include `p_mmd` and `p_wass`.
+  - Tier 2: out-of-sample (2-fold cross-fitted) reference Mahalanobis distances, and a bootstrap threshold per batch size that includes reference sampling error.
+  - Fixed thresholds still work when passed explicitly. Tier 1 requires both or neither.
+- `MonitorPipeline.fit/score` take Tier 1 features and, optionally, separate Tier 2 embeddings and logits.
+- Wasserstein-1 for unequal batch sizes is now exact and vectorized (it was a per-feature Python loop).
+- PyTorch is imported only by `Tier2Monitor.from_encoder`, not by the monitors themselves.
+- Development status set to Pre-Alpha. README and architecture doc state what is and isn't implemented.
+
+### Repository only (not in the package)
+- `scripts/run_ablation.py` previously returned random AUCs and saved them as ΔG results. It now raises `NotImplementedError` until real training exists.
+- `scripts/monitor_dashboard.py` used the same broken API; rebuilt on `MonitorPipeline`. Its action text no longer claims a predicted ΔG or concept drift.
+
+## 0.1.0
+
+Initial upload.

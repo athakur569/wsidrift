@@ -19,8 +19,10 @@ def main(argv: list[str] | None = None) -> None:
     score_p.add_argument("--reference", required=True, help="Reference features .npy or .csv")
     score_p.add_argument("--deployment", required=True, help="Deployment features .npy or .csv")
     score_p.add_argument("--output", default=None, help="Save result JSON to this path")
-    score_p.add_argument("--mmd-threshold", type=float, default=0.05)
-    score_p.add_argument("--wass-threshold", type=float, default=0.10)
+    score_p.add_argument("--alpha", type=float, default=0.05, help="False-alarm rate for the permutation test")
+    score_p.add_argument("--permutations", type=int, default=200)
+    score_p.add_argument("--mmd-threshold", type=float, default=None, help="Fixed threshold (requires --wass-threshold)")
+    score_p.add_argument("--wass-threshold", type=float, default=None, help="Fixed threshold (requires --mmd-threshold)")
 
     args = parser.parse_args(argv)
 
@@ -37,6 +39,8 @@ def main(argv: list[str] | None = None) -> None:
         tier1 = Tier1Monitor(
             mmd_threshold=args.mmd_threshold,
             wass_threshold=args.wass_threshold,
+            alpha=args.alpha,
+            n_permutations=args.permutations,
         ).fit(X_ref)
         monitor = ValidityMonitor(tier1)
         result = monitor.score(X_dep)
