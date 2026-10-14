@@ -58,11 +58,11 @@ class ReinhardNormalizer:
         fy = (L + 16.0) / 116.0
         fx = a / 500.0 + fy
         fz = fy - b / 200.0
-        eps = 0.008856
+        eps, kappa = 0.008856, 903.3
         xyz = np.stack([
-            np.where(fx ** 3 > eps, fx ** 3, (116.0 * fx - 16.0) / 903.3),
-            np.where(L > kappa := 903.3 * eps, ((L + 16.0) / 116.0) ** 3, L / kappa),
-            np.where(fz ** 3 > eps, fz ** 3, (116.0 * fz - 16.0) / 903.3),
+            np.where(fx ** 3 > eps, fx ** 3, (116.0 * fx - 16.0) / kappa),
+            np.where(L > kappa * eps, fy ** 3, L / kappa),
+            np.where(fz ** 3 > eps, fz ** 3, (116.0 * fz - 16.0) / kappa),
         ], axis=-1)
         xyz *= np.array([0.95047, 1.0, 1.08883])
         M_inv = np.array([

@@ -23,7 +23,7 @@ class MacenkoNormalizer:
         """Estimate stain vectors from a reference image (H, W, 3) uint8."""
         he = self._get_stain_matrix(reference)
         self._he_ref = he
-        self._max_ref = self._get_concentrations(reference, he).max(axis=0)
+        self._max_ref = np.percentile(self._get_concentrations(reference, he), 99, axis=0)
         return self
 
     def transform(self, image: np.ndarray) -> np.ndarray:
@@ -31,7 +31,7 @@ class MacenkoNormalizer:
             raise RuntimeError("Call fit() before transform().")
         he = self._get_stain_matrix(image)
         conc = self._get_concentrations(image, he)
-        conc_norm = conc / (conc.max(axis=0) + 1e-6) * self._max_ref
+        conc_norm = conc / (np.percentile(conc, 99, axis=0) + 1e-6) * self._max_ref
         od_norm = np.dot(conc_norm, self._he_ref)
         rgb = np.exp(-od_norm).reshape(image.shape)
         return np.clip(rgb * 255, 0, 255).astype(np.uint8)
@@ -45,7 +45,10 @@ class MacenkoNormalizer:
         od = od[np.all(od > self.beta, axis=1)]
         _, _, vt = np.linalg.svd(od, full_matrices=False)
         plane = vt[:2].T
-        angles = np.arctan2(plane[:, 1], plane[:, 0])
+        plane *= np.where(plane.sum(axis=0) < 0, -1.0, 1.0)  # SVD sign is arbitrary
+        # Angles of the tissue pixels within the plane; their extremes give the stain vectors.
+        proj = od @ plane
+        angles = np.arctan2(proj[:, 1], proj[:, 0])
         phi_min = np.percentile(angles, self.alpha)
         phi_max = np.percentile(angles, 100 - self.alpha)
         v1 = np.array([np.cos(phi_min), np.sin(phi_min)])

@@ -5,6 +5,12 @@
 ### Fixed
 - `MonitorPipeline` crashed on every call: it passed argument names the monitors don't accept and used a `ValidityMonitor` API that doesn't exist. Rebuilt on the current classes.
 - Energy score flagged the wrong tail. Out-of-distribution inputs have **higher** energy (Liu et al. 2020); the flag now fires when batch energy exceeds the threshold. A fixed `energy_threshold` now means "flag above".
+- `wsidrift.norm.reinhard` had a syntax error, so `import wsidrift.norm` failed (also in 0.1.0).
+- Macenko normalization estimated stain vectors from the wrong data (angles of the SVD basis
+  vectors instead of the projected tissue pixels), giving arbitrary stain matrices. It now
+  follows Macenko et al. (2009): pixel angles, SVD sign fix, 99th-percentile concentrations.
+  On synthetic two-stain tiles it recovers the true H&E vectors (cosine > 0.99).
+- Tests now import every module, so a broken module can't ship unnoticed.
 - Tier 2 no longer invents all-zero logits when none are given. Energy is only used when reference logits were supplied at `fit()`, or when a fixed energy threshold is set.
 
 ### Changed
