@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from scipy.stats import wasserstein_distance
 
-from wsidrift.monitor.divergence import Tier1Monitor, _wasserstein_mean, sliced_wasserstein
+from wsidrift.monitor.divergence import Tier1Monitor, _wasserstein_mean
 from wsidrift.monitor.embedding import Tier2Monitor, energy
 from wsidrift.monitor.validity_score import ValidityMonitor
 
@@ -58,34 +58,6 @@ class TestTier1Monitor:
         X, Y = _gaussian(n, 5, seed=3), _gaussian(m, 5, seed=4) * 2 + 1
         expected = np.mean([wasserstein_distance(X[:, i], Y[:, i]) for i in range(5)])
         assert _wasserstein_mean(X, Y) == pytest.approx(expected, rel=1e-9)
-
-
-class TestSlicedWasserstein:
-    def test_matches_scipy_on_projections(self):
-        X, Y = _gaussian(40, 3, seed=5), _gaussian(30, 3, seed=6) + 0.5
-        directions = np.random.default_rng(7).standard_normal((3, 16))
-        directions /= np.linalg.norm(directions, axis=0, keepdims=True)
-        expected = np.mean(
-            [wasserstein_distance(X @ directions[:, k], Y @ directions[:, k]) for k in range(16)]
-        )
-        assert sliced_wasserstein(X, Y, n_projections=16, seed=7) == pytest.approx(expected, rel=1e-9)
-
-    def test_catches_correlation_shift_that_marginals_miss(self):
-        # Same N(0, 1) marginals; Y's two features are perfectly correlated.
-        rng = np.random.default_rng(0)
-        X = rng.standard_normal((2000, 2))
-        z = rng.standard_normal(2000)
-        Y = np.column_stack([z, z])
-        assert _wasserstein_mean(X, Y) < 0.1
-        assert sliced_wasserstein(X, Y) > 3 * _wasserstein_mean(X, Y)
-
-    def test_zero_for_identical_samples(self):
-        X = _gaussian(50, 4)
-        assert sliced_wasserstein(X, X) == pytest.approx(0.0, abs=1e-12)
-
-    def test_dimension_mismatch_raises(self):
-        with pytest.raises(ValueError):
-            sliced_wasserstein(_gaussian(10, 3), _gaussian(10, 4))
 
 
 class TestTier2Monitor:

@@ -41,24 +41,6 @@ def _wasserstein_mean(X: np.ndarray, Y: np.ndarray) -> float:
     return float(per_feature.mean())
 
 
-def sliced_wasserstein(
-    X: np.ndarray, Y: np.ndarray, n_projections: int = 128, seed: int = 0
-) -> float:
-    """Sliced Wasserstein-1: mean exact W₁ over random 1-D projections.
-
-    Per-feature Wasserstein only compares marginals, so it misses shifts in how
-    features co-vary; projecting onto random unit directions catches those.
-    Ported from domain-shift-metrics (sliced_wasserstein), vectorized.
-    """
-    X = np.asarray(X, dtype=np.float64)
-    Y = np.asarray(Y, dtype=np.float64)
-    if X.ndim != 2 or Y.ndim != 2 or X.shape[1] != Y.shape[1]:
-        raise ValueError(f"Expected (n, d) and (m, d) arrays, got {X.shape} and {Y.shape}")
-    directions = np.random.default_rng(seed).standard_normal((X.shape[1], n_projections))
-    directions /= np.linalg.norm(directions, axis=0, keepdims=True)
-    return _wasserstein_mean(X @ directions, Y @ directions)
-
-
 def _rbf_kernel(X: np.ndarray, Y: np.ndarray, sigma: float) -> np.ndarray:
     sq_dist = (
         (X ** 2).sum(1, keepdims=True)
