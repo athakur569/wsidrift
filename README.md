@@ -21,7 +21,8 @@ Embeddings (+ logits) ──► Tier 2: Model response (Mahalanobis, energy) ─
 ## Install
 
 ```bash
-pip install wsidrift
+pip install wsidrift            # numpy, scipy, scikit-learn only
+pip install "wsidrift[torch]"   # adds PyTorch, needed only for Tier2Monitor.from_encoder
 ```
 
 ## Example
@@ -60,9 +61,9 @@ wsidrift score --reference ref.npy --deployment dep.npy --alpha 0.05
 | Tier 1 (MMD², Wasserstein, permutation test) | Implemented; synthetic tests only |
 | Tier 2 (Mahalanobis, energy, calibrated thresholds) | Implemented; synthetic tests only |
 | Conjunction rule and `MonitorPipeline` | Implemented; synthetic tests only |
-| Macenko and Reinhard normalization, DANN, ΔG and statistics helpers | Implemented; not validated |
+| Macenko and Reinhard normalization, ΔG and statistics helpers | Implemented; not validated |
 | Link from divergence to predicted performance loss (ΔG) | Not implemented |
-| E1–E9 ablation training, CycleGAN training | Not implemented |
+| E1–E9 model training | Not part of this package (research repository) |
 
 On synthetic Gaussian data at α = 0.05, the measured false-alarm rate was about 2.5% for Tier 1 and 5.4% for Tier 2, averaged over many reference sets. These numbers say the calibration works as designed; they say nothing about performance on pathology data.
 

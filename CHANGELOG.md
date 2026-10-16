@@ -23,8 +23,16 @@
 - PyTorch is imported only by `Tier2Monitor.from_encoder`, not by the monitors themselves.
 - Development status set to Pre-Alpha. README and architecture doc state what is and isn't implemented.
 
+### Removed
+- Unfinished or unused modules: `wsidrift.cyclegan` (stub), `wsidrift.data` (dataset loaders),
+  `wsidrift.adapt` (DANN). None was used by the monitor or covered by tests; model training
+  belongs in the research repository.
+- Dependencies the monitor does not use (torchvision, pytorch-lightning, pandas, openslide,
+  OpenCV, Pillow, omegaconf, tqdm). Core install is now numpy, scipy and scikit-learn;
+  `pip install wsidrift[torch]` adds PyTorch for `Tier2Monitor.from_encoder`.
+
 ### Repository only (not in the package)
-- `scripts/run_ablation.py` previously returned random AUCs and saved them as ΔG results. It now raises `NotImplementedError` until real training exists.
+- `scripts/run_ablation.py` returned random AUCs and saved them as ΔG results. Removed.
 - `scripts/monitor_dashboard.py` used the same broken API; rebuilt on `MonitorPipeline`. Its action text no longer claims a predicted ΔG or concept drift.
 
 ## 0.1.0
