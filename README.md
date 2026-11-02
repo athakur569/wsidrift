@@ -69,6 +69,15 @@ On synthetic Gaussian data at α = 0.05, the measured false-alarm rate was about
 
 ## Limitations
 
+- **Correlated samples (important).** Tiles from one slide resemble each other. Release 0.1.1 permutes and
+  bootstraps single tiles, which treats them as independent: on real CAMELYON17 tiles with no shift at all
+  (training slides split into two random halves), Tier 1 alarmed in 82% (pixel statistics) and 100%
+  (DenseNet-121 features) of 40 splits at a nominal 10%. The main branch adds `groups` (one slide or patient id
+  per sample) to `fit` and `score`; with slide groups the same check alarmed in 5% and 2%. Pass `groups` for
+  any tile-level data. Not yet released on PyPI.
+- **Validation so far.** Tier 1 has been checked on real tiles under the null (above); Tier 2 and the
+  conjunction rule have been tested on simulated data only. Detection of real, harmful shifts is the subject
+  of ongoing work and is not yet demonstrated.
 - Assumes covariate shift: the input distribution changes while the relationship between inputs and labels stays the same. This is reasonable for stain and scanner variation, and doesn't hold for changes in label definitions.
 - Tier 1 runs a permutation test, so it costs more on large batches: about 13 seconds for 1,000 reference and 200 deployment samples with 2,048-dimensional features.
 - Tier 2's Mahalanobis statistic is less sensitive than Tier 1 to small shifts spread across many dimensions.

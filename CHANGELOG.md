@@ -10,6 +10,8 @@
   Simulation with strong slide effects and no real shift, alpha = 0.10 (200 deployments, 40 reference
   slides): Tier 1 false alarms 100% tile-level vs 6% cluster-level; Tier 2 52% vs 11%.
   Calls without `groups` behave as before.
+  Real-data check (CAMELYON17 training slides split into random halves, no shift, 40 splits, nominal 10%):
+  Tier 1 on pixel statistics 82% tile-level vs 5% with slide groups; on DenseNet-121 features 100% vs 2%.
 
 ## 0.1.1 — pre-alpha
 
