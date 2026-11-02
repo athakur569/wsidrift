@@ -93,14 +93,23 @@ class Tier2Monitor:
         self.n_bootstrap = n_bootstrap
         self.seed = seed
         self._mu: np.ndarray | None = None
+        self._ref_groups: np.ndarray | None = None
         self._precision: np.ndarray | None = None
         self._ref_maha: np.ndarray | None = None
         self._ref_energy: np.ndarray | None = None
 
-    def fit(self, embeddings: np.ndarray, logits: np.ndarray | None = None) -> "Tier2Monitor":
-        """Fit on reference embeddings (n, d) and, optionally, reference logits (n, k)."""
+    def fit(self, embeddings: np.ndarray, logits: np.ndarray | None = None,
+            groups: np.ndarray | None = None) -> "Tier2Monitor":
+        """Fit on reference embeddings (n, d) and, optionally, reference logits (n, k).
+
+        ``groups``: optional cluster id per reference sample (e.g. slide). With groups, the batch
+        threshold is bootstrapped over whole clusters, since tiles of one slide are correlated.
+        """
         Z = np.asarray(embeddings, dtype=np.float64)
         n, d = Z.shape
+        self._ref_groups = None if groups is None else np.asarray(groups)
+        if self._ref_groups is not None and len(self._ref_groups) != n:
+            raise ValueError("groups must have one entry per reference sample")
         self._mu, self._precision = _fit_gaussian(Z)
 
         self._folds = None
@@ -108,8 +117,16 @@ class Tier2Monitor:
             # Out-of-sample reference distances from two half-data models. Deployment
             # samples are scored with the same half-data models (see score), so reference
             # and deployment distances come from the same estimator and the threshold is calibrated.
-            perm = np.random.default_rng(self.seed).permutation(n)
-            a, b = perm[: n // 2], perm[n // 2 :]
+            rng = np.random.default_rng(self.seed)
+            if self._ref_groups is None:
+                perm = rng.permutation(n)
+                a, b = perm[: n // 2], perm[n // 2 :]
+            else:
+                # Split by cluster, so each reference distance is measured on clusters (slides)
+                # the half-model has never seen — as deployment slides will be.
+                uniq = rng.permutation(np.unique(self._ref_groups))
+                first = np.isin(self._ref_groups, uniq[: len(uniq) // 2])
+                a, b = np.flatnonzero(first), np.flatnonzero(~first)
             ref = np.empty(n)
             self._folds = []
             for fit_idx, eval_idx in ((a, b), (b, a)):
@@ -140,10 +157,33 @@ class Tier2Monitor:
         ref = values[rng.integers(0, n, size=(self.n_bootstrap, n))].mean(axis=1)
         return float(values.mean() + np.quantile(batch - ref, 1 - alpha))
 
-    def score(self, embeddings: np.ndarray, logits: np.ndarray | None = None) -> Tier2Result:
-        """Score a deployment batch of embeddings (m, d) and optional logits (m, k)."""
+    def _bootstrap_upper_clustered(self, values: np.ndarray, k: int, alpha: float) -> float:
+        """Upper (1 − α) threshold for the mean over a batch of ``k`` clusters (slides).
+
+        As ``_bootstrap_upper``, but whole reference clusters are drawn, so correlation between
+        tiles of one cluster is reflected in the threshold.
+        """
+        rng = np.random.default_rng(self.seed)
+        uniq, inv = np.unique(self._ref_groups, return_inverse=True)
+        sums = np.bincount(inv, weights=values)
+        sizes = np.bincount(inv).astype(float)
+        c = len(uniq)
+        bd = rng.integers(0, c, size=(self.n_bootstrap, k))
+        br = rng.integers(0, c, size=(self.n_bootstrap, c))
+        batch = sums[bd].sum(1) / sizes[bd].sum(1)
+        ref = sums[br].sum(1) / sizes[br].sum(1)
+        return float(values.mean() + np.quantile(batch - ref, 1 - alpha))
+
+    def score(self, embeddings: np.ndarray, logits: np.ndarray | None = None,
+              groups: np.ndarray | None = None) -> Tier2Result:
+        """Score a deployment batch of embeddings (m, d) and optional logits (m, k).
+
+        ``groups``: cluster id per deployment sample; required if, and only if, ``fit`` had groups.
+        """
         if self._mu is None:
             raise RuntimeError("Call fit() before score()")
+        if (groups is None) != (self._ref_groups is None):
+            raise ValueError("pass groups to both fit() and score(), or to neither")
 
         Z = np.asarray(embeddings, dtype=np.float64)
         m = len(Z)
@@ -164,14 +204,17 @@ class Tier2Monitor:
         # Split alpha across the statistics actually in use.
         n_stats = 2 if energy_mean is not None else 1
         a = self.alpha / n_stats
-        t_maha = self.maha_threshold if self.maha_threshold is not None else self._bootstrap_upper(self._ref_maha, m, a)
+        if groups is None:
+            upper = lambda v: self._bootstrap_upper(v, m, a)  # noqa: E731
+        else:
+            if len(groups) != m:
+                raise ValueError("groups must have one entry per deployment sample")
+            k = len(np.unique(groups))
+            upper = lambda v: self._bootstrap_upper_clustered(v, k, a)  # noqa: E731
+        t_maha = self.maha_threshold if self.maha_threshold is not None else upper(self._ref_maha)
         t_energy = None
         if energy_mean is not None:
-            t_energy = (
-                self.energy_threshold
-                if self.energy_threshold is not None
-                else self._bootstrap_upper(self._ref_energy, m, a)
-            )
+            t_energy = self.energy_threshold if self.energy_threshold is not None else upper(self._ref_energy)
 
         flagged = bool(maha.mean() > t_maha or (energy_mean is not None and energy_mean > t_energy))
         return Tier2Result(

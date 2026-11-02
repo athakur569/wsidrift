@@ -117,3 +117,46 @@ class TestValidityMonitor:
         )
         assert result.overall_flag
         assert result.validity_score == 1.0
+
+
+def _clustered(n_clusters, per, dim, seed, effect=1.0, noise=0.3):
+    """Null data with strong cluster effects: every cluster (slide) has its own offset."""
+    r = np.random.default_rng(seed)
+    X = np.concatenate([r.normal(0, effect, dim) + r.normal(0, noise, (per, dim)) for _ in range(n_clusters)])
+    return X, np.repeat(np.arange(n_clusters), per)
+
+
+class TestClusteredCalibration:
+    def _rates(self, monitor_cls, **kw):
+        tile = cluster = 0
+        reps = 25
+        for s in range(reps):
+            Xr, gr = _clustered(12, 15, 3, seed=2 * s)
+            Xd, gd = _clustered(12, 15, 3, seed=2 * s + 1)
+            tile += monitor_cls(**kw).fit(Xr).score(Xd).flagged
+            cluster += monitor_cls(**kw).fit(Xr, groups=gr).score(Xd, groups=gd).flagged
+        return tile / reps, cluster / reps
+
+    def test_tier1_cluster_permutation_controls_false_alarms(self):
+        tile, cluster = self._rates(Tier1Monitor, alpha=0.1, n_permutations=49)
+        assert tile > 0.5            # tile-level permutation treats correlated tiles as independent
+        assert cluster <= 0.25       # whole-cluster permutation stays near alpha
+
+    def test_tier2_cluster_bootstrap_controls_false_alarms(self):
+        tile, cluster = self._rates(Tier2Monitor, alpha=0.1)
+        assert tile > cluster
+        assert cluster <= 0.25
+
+    def test_cluster_mode_still_detects_real_shift(self):
+        Xr, gr = _clustered(12, 15, 3, seed=0)
+        Xd, gd = _clustered(12, 15, 3, seed=1)
+        assert Tier1Monitor(alpha=0.1, n_permutations=49).fit(Xr, groups=gr).score(Xd + 3.0, groups=gd).flagged
+
+    def test_groups_must_be_given_to_both_or_neither(self):
+        Xr, gr = _clustered(4, 5, 2, seed=0)
+        with pytest.raises(ValueError, match="both"):
+            Tier1Monitor().fit(Xr, groups=gr).score(Xr)
+        with pytest.raises(ValueError, match="both"):
+            Tier2Monitor().fit(Xr).score(Xr, groups=gr)
+        with pytest.raises(ValueError, match="at least 2 clusters"):
+            Tier1Monitor().fit(Xr, groups=np.zeros(len(Xr))).score(Xr, groups=gr)

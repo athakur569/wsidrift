@@ -9,6 +9,10 @@ This holds for stain and scanner variation in H&E histopathology.
 By default the flag is a permutation two-sample test at false-alarm rate ``alpha``
 (Bonferroni-split across the MMD and Wasserstein statistics). Passing explicit
 thresholds switches to fixed-threshold mode.
+
+Clustered samples: tiles from one slide (or patient) resemble each other, so permuting single
+tiles treats them as independent and false-alarms above ``alpha``. Pass ``groups`` (one id per
+sample) to ``fit`` and ``score`` and whole groups are permuted instead.
 """
 
 from __future__ import annotations
@@ -142,15 +146,22 @@ class Tier1Monitor:
         self.n_permutations = n_permutations
         self.seed = seed
         self._reference: np.ndarray | None = None
+        self._ref_groups: np.ndarray | None = None
         self._sigma: float | None = None
 
     @property
     def fixed_thresholds(self) -> bool:
         return self.mmd_threshold is not None
 
-    def fit(self, X_reference: np.ndarray) -> "Tier1Monitor":
-        """Store reference distribution and estimate bandwidth."""
+    def fit(self, X_reference: np.ndarray, groups: np.ndarray | None = None) -> "Tier1Monitor":
+        """Store reference distribution and estimate bandwidth.
+
+        ``groups``: optional cluster id per reference sample (e.g. slide); see the module docstring.
+        """
         self._reference = np.asarray(X_reference, dtype=np.float64)
+        self._ref_groups = None if groups is None else np.asarray(groups)
+        if self._ref_groups is not None and len(self._ref_groups) != len(self._reference):
+            raise ValueError("groups must have one entry per reference sample")
         self._sigma = _median_bandwidth(self._reference, seed=self.seed)
         logger.info(
             "Tier1Monitor fitted on %d samples, bandwidth=%.4f",
@@ -158,10 +169,16 @@ class Tier1Monitor:
         )
         return self
 
-    def score(self, X_deployment: np.ndarray) -> Tier1Result:
-        """Compute divergence of a deployment batch against the reference."""
+    def score(self, X_deployment: np.ndarray, groups: np.ndarray | None = None) -> Tier1Result:
+        """Compute divergence of a deployment batch against the reference.
+
+        ``groups``: cluster id per deployment sample; required if, and only if, the reference
+        was fitted with groups. Then whole clusters are permuted.
+        """
         if self._reference is None:
             raise RuntimeError("Call fit() before score()")
+        if (groups is None) != (self._ref_groups is None):
+            raise ValueError("pass groups to both fit() and score(), or to neither")
 
         X = self._reference
         Y = np.asarray(X_deployment, dtype=np.float64)
@@ -178,10 +195,25 @@ class Tier1Monitor:
             return Tier1Result(mmd2, wass, flagged, self.mmd_threshold, self.wass_threshold)
 
         rng = np.random.default_rng(self.seed)
+        if groups is not None:
+            if len(groups) != m:
+                raise ValueError("groups must have one entry per deployment sample")
+            # Cluster labels made distinct across the two batches, then whole clusters permuted.
+            cl = np.concatenate([[f"r|{g}" for g in self._ref_groups], [f"d|{g}" for g in groups]])
+            uniq, inv = np.unique(cl, return_inverse=True)
+            members = [np.flatnonzero(inv == k) for k in range(len(uniq))]
+            n_ref_clusters = len(np.unique(self._ref_groups))
+            if n_ref_clusters < 2 or len(uniq) - n_ref_clusters < 2:
+                raise ValueError("need at least 2 clusters in each batch for a cluster permutation test")
         exceed_mmd = exceed_wass = 0
         for _ in range(self.n_permutations):
-            perm = rng.permutation(n + m)
-            px, py = perm[:n], perm[n:]
+            if groups is None:
+                perm = rng.permutation(n + m)
+                px, py = perm[:n], perm[n:]
+            else:
+                order = rng.permutation(len(members))
+                px = np.concatenate([members[k] for k in order[:n_ref_clusters]])
+                py = np.concatenate([members[k] for k in order[n_ref_clusters:]])
             exceed_mmd += _mmd2_unbiased(K, px, py) >= mmd2
             exceed_wass += _wasserstein_mean(Z[px], Z[py]) >= wass
         p_mmd = (1 + exceed_mmd) / (1 + self.n_permutations)

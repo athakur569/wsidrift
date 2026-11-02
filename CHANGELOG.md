@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- `groups` (cluster id per sample, e.g. slide or patient) for `Tier1Monitor.fit/score` and
+  `Tier2Monitor.fit/score`. Tiles of one slide are correlated; tile-level permutation and bootstrap
+  treat them as independent and false-alarm far above `alpha`. With groups, Tier 1 permutes whole
+  clusters, and Tier 2 cross-fits by cluster and bootstraps its batch threshold over clusters.
+  Simulation with strong slide effects and no real shift, alpha = 0.10 (200 deployments, 40 reference
+  slides): Tier 1 false alarms 100% tile-level vs 6% cluster-level; Tier 2 52% vs 11%.
+  Calls without `groups` behave as before.
+
 ## 0.1.1 — pre-alpha
 
 ### Fixed
