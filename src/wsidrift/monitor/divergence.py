@@ -24,6 +24,8 @@ from pathlib import Path
 
 import numpy as np
 
+from ..guards import finite
+
 logger = logging.getLogger(__name__)
 
 
@@ -158,7 +160,7 @@ class Tier1Monitor:
 
         ``groups``: optional cluster id per reference sample (e.g. slide); see the module docstring.
         """
-        self._reference = np.asarray(X_reference, dtype=np.float64)
+        self._reference = finite(X_reference, "reference features")
         self._ref_groups = None if groups is None else np.asarray(groups)
         if self._ref_groups is not None and len(self._ref_groups) != len(self._reference):
             raise ValueError("groups must have one entry per reference sample")
@@ -181,7 +183,7 @@ class Tier1Monitor:
             raise ValueError("pass groups to both fit() and score(), or to neither")
 
         X = self._reference
-        Y = np.asarray(X_deployment, dtype=np.float64)
+        Y = finite(X_deployment, "deployment features")
         n, m = len(X), len(Y)
         Z = np.vstack([X, Y])
         K = _rbf_kernel(Z, Z, self._sigma)
@@ -189,6 +191,8 @@ class Tier1Monitor:
 
         mmd2 = _mmd2_unbiased(K, idx_x, idx_y)
         wass = _wasserstein_mean(X, Y)
+        if not (np.isfinite(mmd2) and np.isfinite(wass)):
+            raise ValueError("the statistic is NaN or infinite, so no p-value exists")
 
         if self.fixed_thresholds:
             flagged = mmd2 > self.mmd_threshold or wass > self.wass_threshold

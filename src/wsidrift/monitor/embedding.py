@@ -18,6 +18,8 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.special import logsumexp
 
+from ..guards import finite
+
 logger = logging.getLogger(__name__)
 
 _MIN_CROSSFIT = 40
@@ -105,7 +107,9 @@ class Tier2Monitor:
         ``groups``: optional cluster id per reference sample (e.g. slide). With groups, the batch
         threshold is bootstrapped over whole clusters, since tiles of one slide are correlated.
         """
-        Z = np.asarray(embeddings, dtype=np.float64)
+        Z = finite(embeddings, "reference embeddings")
+        if logits is not None:
+            finite(logits, "reference logits")
         n, d = Z.shape
         self._ref_groups = None if groups is None else np.asarray(groups)
         if self._ref_groups is not None and len(self._ref_groups) != n:
@@ -185,7 +189,9 @@ class Tier2Monitor:
         if (groups is None) != (self._ref_groups is None):
             raise ValueError("pass groups to both fit() and score(), or to neither")
 
-        Z = np.asarray(embeddings, dtype=np.float64)
+        Z = finite(embeddings, "deployment embeddings")
+        if logits is not None:
+            finite(logits, "deployment logits")
         m = len(Z)
         if self._folds is not None:
             maha = np.empty(m)

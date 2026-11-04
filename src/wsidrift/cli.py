@@ -41,9 +41,11 @@ def main(argv: list[str] | None = None) -> None:
             wass_threshold=args.wass_threshold,
             alpha=args.alpha,
             n_permutations=args.permutations,
-        ).fit(X_ref)
-        monitor = ValidityMonitor(tier1)
-        result = monitor.score(X_dep)
+        )
+        try:
+            result = ValidityMonitor(tier1.fit(X_ref)).score(X_dep)
+        except ValueError as e:
+            sys.exit(str(e))
         print(result.summary_line())
 
         if args.output:

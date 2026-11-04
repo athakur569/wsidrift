@@ -75,6 +75,11 @@ On synthetic Gaussian data at α = 0.05, the measured false-alarm rate was about
   (DenseNet-121 features) of 40 splits at a nominal 10%. The main branch adds `groups` (one slide or patient id
   per sample) to `fit` and `score`; with slide groups the same check alarmed in 5% and 2%. Pass `groups` for
   any tile-level data. Not yet released on PyPI.
+- **Bad input in 0.1.1.** The PyPI release does not check for NaN or infinite values, and one such value decides the
+  result. In Tier 1 it gives a NaN statistic and the smallest possible p-value, so the batch is flagged whatever the data
+  show. In Tier 2 it gives a NaN mean distance that never flags, so the AND rule stays silent even on a clear shift. With
+  0.1.1, check your features with `numpy.isfinite` before calling `score`. `main` refuses such input and names the rows.
+  Not yet released on PyPI.
 - **Validation so far.** Tier 1 has been checked on real tiles under the null (above); Tier 2 and the
   conjunction rule have been tested on simulated data only. Detection of real, harmful shifts is the subject
   of ongoing work and is not yet demonstrated.
