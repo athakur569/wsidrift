@@ -1,7 +1,9 @@
 """Composed validity score — conjunction rule across Tier 1 and Tier 2.
 
 Flags "likely invalid" only when BOTH tiers signal shift. The conjunction
-cuts false-alarm rate and catches some silent failures neither sees alone.
+can only remove alarms: it lowers the false-alarm rate at the cost of missing
+some shifts that one tier alone would flag. It cannot catch a failure that
+neither tier sees.
 
 Development-time relationship:
   ΔG = in-domain AUC − cross-domain AUC   [requires labels, computed once]
