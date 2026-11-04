@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Fixed
+- **A NaN read as drift.** In 0.1.1, one NaN feature gave Tier 1 a NaN statistic; every comparison with NaN is false, so
+  no permuted value exceeded it and the p-value came out as the smallest possible. A failed slide looked like the
+  strongest signal there is. Tier 2 failed the other way: a NaN mean distance never flags, so the AND rule stayed silent
+  even on a clear shift. (In 0.1.0, with fixed thresholds, a NaN could never alarm.) Tier 1 and Tier 2 now refuse NaN or
+  infinite input and name the rows (`wsidrift.guards`). They stop rather than drop them, because a run of failed slides
+  may be what needs attention.
+
 ### Added
 - `groups` (cluster id per sample, e.g. slide or patient) for `Tier1Monitor.fit/score` and
   `Tier2Monitor.fit/score`. Tiles of one slide are correlated; tile-level permutation and bootstrap
