@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -185,6 +186,8 @@ class Tier1Monitor:
         X = self._reference
         Y = finite(X_deployment, "deployment features")
         n, m = len(X), len(Y)
+        if n < 2 or m < 2:
+            raise ValueError(f"need at least 2 samples in each batch for MMD² (reference {n}, deployment {m})")
         Z = np.vstack([X, Y])
         K = _rbf_kernel(Z, Z, self._sigma)
         idx_x, idx_y = np.arange(n), np.arange(n, n + m)
@@ -198,6 +201,14 @@ class Tier1Monitor:
             flagged = mmd2 > self.mmd_threshold or wass > self.wass_threshold
             return Tier1Result(mmd2, wass, flagged, self.mmd_threshold, self.wass_threshold)
 
+        # The smallest p-value a permutation test can give is 1/(n_permutations+1). If that is not
+        # below alpha/2, the monitor can never flag, whatever the data: refuse rather than stay silent.
+        if 1 / (self.n_permutations + 1) >= self.alpha / 2:
+            raise ValueError(
+                f"with {self.n_permutations} permutations the smallest p-value is "
+                f"{1 / (self.n_permutations + 1):.4f}, not below alpha/2 = {self.alpha / 2:.4f}, so Tier 1 "
+                f"could never flag. Use at least {math.ceil(2 / self.alpha)} permutations."
+            )
         rng = np.random.default_rng(self.seed)
         if groups is not None:
             if len(groups) != m:
@@ -209,6 +220,17 @@ class Tier1Monitor:
             n_ref_clusters = len(np.unique(self._ref_groups))
             if n_ref_clusters < 2 or len(uniq) - n_ref_clusters < 2:
                 raise ValueError("need at least 2 clusters in each batch for a cluster permutation test")
+            # With few clusters there are few distinct splits, and the observed split is one of them
+            # (two, when both batches have the same number of clusters, since the statistics are
+            # symmetric). The p-value cannot fall much below that share, so the test may be unable to flag.
+            n_dep_clusters = len(uniq) - n_ref_clusters
+            distinct = math.comb(len(uniq), n_ref_clusters) // (2 if n_ref_clusters == n_dep_clusters else 1)
+            if 1 / distinct >= self.alpha / 2:
+                raise ValueError(
+                    f"{n_ref_clusters} reference and {n_dep_clusters} deployment clusters allow only {distinct} "
+                    f"distinct splits, so the p-value cannot fall below about {1 / distinct:.3f} and Tier 1 "
+                    f"could never flag at alpha/2 = {self.alpha / 2:.4f}. Use more clusters."
+                )
         exceed_mmd = exceed_wass = 0
         for _ in range(self.n_permutations):
             if groups is None:
@@ -226,12 +248,31 @@ class Tier1Monitor:
         return Tier1Result(mmd2, wass, flagged, None, None, p_mmd=p_mmd, p_wass=p_wass, alpha=self.alpha)
 
     def save(self, path: str | Path) -> None:
-        state = {
+        """Save settings and the fitted reference to a .npz file; ``load`` restores a monitor that scores identically."""
+        if self._reference is None:
+            raise RuntimeError("Call fit() before save()")
+        settings = {
             "mmd_threshold": self.mmd_threshold,
             "wass_threshold": self.wass_threshold,
             "alpha": self.alpha,
             "n_permutations": self.n_permutations,
+            "seed": self.seed,
             "sigma": self._sigma,
-            "n_reference": len(self._reference) if self._reference is not None else None,
         }
-        Path(path).write_text(json.dumps(state, indent=2))
+        arrays = {"reference": self._reference}
+        if self._ref_groups is not None:
+            arrays["groups"] = self._ref_groups
+        with open(path, "wb") as f:
+            np.savez(f, settings=json.dumps(settings), **arrays)
+
+    @classmethod
+    def load(cls, path: str | Path) -> "Tier1Monitor":
+        """Restore a monitor written by ``save``."""
+        with np.load(path, allow_pickle=False) as z:
+            settings = json.loads(str(z["settings"]))
+            sigma = settings.pop("sigma")
+            monitor = cls(**settings)
+            monitor._reference = z["reference"]
+            monitor._ref_groups = z["groups"] if "groups" in z.files else None
+        monitor._sigma = sigma
+        return monitor

@@ -31,8 +31,8 @@ def wilcoxon_test(a: list[float], b: list[float], alpha: float = 0.05) -> TestRe
     return TestResult(statistic=float(stat), p_value=float(p), significant=p < alpha, alpha=alpha)
 
 
-def bonferroni_correct(p_values: list[float], alpha: float = 0.05) -> list[float]:
-    """Return Bonferroni-corrected significance threshold for each comparison."""
+def bonferroni_correct(p_values: list[float], alpha: float = 0.05) -> list[bool]:
+    """Return, for each p-value, whether it is significant at the Bonferroni-corrected level alpha / n."""
     n = len(p_values)
     corrected_alpha = alpha / n
     return [p < corrected_alpha for p in p_values]

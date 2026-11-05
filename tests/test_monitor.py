@@ -180,6 +180,29 @@ class TestClusteredCalibration:
         with pytest.raises(ValueError, match="both"):
             Tier1Monitor().fit(Xr, groups=gr).score(Xr)
         with pytest.raises(ValueError, match="both"):
-            Tier2Monitor().fit(Xr).score(Xr, groups=gr)
+            Tier2Monitor(allow_small_reference=True).fit(Xr).score(Xr, groups=gr)
         with pytest.raises(ValueError, match="at least 2 clusters"):
             Tier1Monitor().fit(Xr, groups=np.zeros(len(Xr))).score(Xr, groups=gr)
+
+
+class TestTier2SmallReference:
+    def test_calibrated_refuses_below_40(self):
+        with pytest.raises(ValueError, match="at least 40"):
+            Tier2Monitor().fit(_gaussian(39, 8, seed=0))
+
+    def test_opt_in_allows_small_reference(self):
+        result = Tier2Monitor(allow_small_reference=True).fit(_gaussian(30, 8, seed=0)).score(_gaussian(20, 8, seed=1))
+        assert np.isfinite(result.mahalanobis_mean)
+
+    def test_fixed_threshold_needs_no_opt_in(self):
+        Tier2Monitor(maha_threshold=3.0).fit(_gaussian(20, 8, seed=0))
+
+    def test_40_is_enough(self):
+        Tier2Monitor().fit(_gaussian(40, 8, seed=0))
+
+    def test_pipeline_passes_opt_in(self):
+        from wsidrift.monitor.pipeline import MonitorPipeline
+        X = _gaussian(30, 8, seed=0)
+        with pytest.raises(ValueError, match="at least 40"):
+            MonitorPipeline(n_permutations=99).fit(X)
+        MonitorPipeline(n_permutations=99, t2_allow_small_reference=True).fit(X)

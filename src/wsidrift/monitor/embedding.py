@@ -61,6 +61,27 @@ def _mahalanobis(Z: np.ndarray, mu: np.ndarray, precision: np.ndarray) -> np.nda
     return np.sqrt(np.maximum((diff @ precision * diff).sum(axis=1), 0))
 
 
+def _check_logits(logits: np.ndarray, n: int, which: str) -> None:
+    if logits.ndim != 2 or len(logits) != n:
+        raise ValueError(f"{which} logits: shape {logits.shape}, expected ({n}, k), one row per embedding")
+
+
+_CHUNK = 2**22  # draws per bootstrap chunk (32 MB of int64 indices), whatever the reference size
+
+
+def _resampled_means(values: np.ndarray, size: int, n_draws: int, rng: np.random.Generator) -> np.ndarray:
+    """Means of ``n_draws`` resamples of ``size`` from ``values``, in chunks so memory stays bounded.
+
+    Rows are drawn in order from ``rng``, so the result is identical to drawing all rows at once.
+    """
+    out = np.empty(n_draws)
+    rows = max(1, _CHUNK // max(size, 1))
+    for start in range(0, n_draws, rows):
+        stop = min(start + rows, n_draws)
+        out[start:stop] = values[rng.integers(0, len(values), size=(stop - start, size))].mean(axis=1)
+    return out
+
+
 def energy(logits: np.ndarray, temperature: float = 1.0) -> np.ndarray:
     """Per-sample energy E(x) = −T·logsumexp(f(x)/T) (Liu et al. 2020).
 
@@ -79,6 +100,12 @@ class Tier2Monitor:
         maha_threshold:   Fixed threshold on the batch-mean Mahalanobis distance.
         energy_threshold: Fixed threshold on batch-mean energy; flags when exceeded.
         seed:             Seed for cross-fitting and bootstrap.
+        allow_small_reference: Calibrate on fewer than 40 reference samples anyway. Below 40 the
+                          reference distances are in-sample, so the threshold is too low and the
+                          false-alarm rate is far above ``alpha`` (at alpha = 0.05 and n = 30:
+                          59% in 5 dimensions, 100% in 16).
+                          Off by default: ``fit`` raises instead. Not needed with a fixed
+                          ``maha_threshold``.
     """
 
     def __init__(
@@ -88,12 +115,14 @@ class Tier2Monitor:
         alpha: float = 0.05,
         n_bootstrap: int = 2000,
         seed: int = 0,
+        allow_small_reference: bool = False,
     ) -> None:
         self.maha_threshold = maha_threshold
         self.energy_threshold = energy_threshold
         self.alpha = alpha
         self.n_bootstrap = n_bootstrap
         self.seed = seed
+        self.allow_small_reference = allow_small_reference
         self._mu: np.ndarray | None = None
         self._ref_groups: np.ndarray | None = None
         self._precision: np.ndarray | None = None
@@ -108,12 +137,14 @@ class Tier2Monitor:
         threshold is bootstrapped over whole clusters, since tiles of one slide are correlated.
         """
         Z = finite(embeddings, "reference embeddings")
-        if logits is not None:
-            finite(logits, "reference logits")
         n, d = Z.shape
+        if logits is not None:
+            _check_logits(finite(logits, "reference logits"), n, "reference")
         self._ref_groups = None if groups is None else np.asarray(groups)
         if self._ref_groups is not None and len(self._ref_groups) != n:
             raise ValueError("groups must have one entry per reference sample")
+        if self._ref_groups is not None and len(np.unique(self._ref_groups)) < 2:
+            raise ValueError("groups: need at least 2 reference clusters; with one, the cluster split has an empty half")
         self._mu, self._precision = _fit_gaussian(Z)
 
         self._folds = None
@@ -131,6 +162,12 @@ class Tier2Monitor:
                 uniq = rng.permutation(np.unique(self._ref_groups))
                 first = np.isin(self._ref_groups, uniq[: len(uniq) // 2])
                 a, b = np.flatnonzero(first), np.flatnonzero(~first)
+            if min(len(a), len(b)) <= d + 1:
+                logger.warning(
+                    "Tier2Monitor: half-reference of %d samples for %d dimensions; using per-dimension "
+                    "variances (correlations ignored). Calibration holds, but this is not full Mahalanobis. "
+                    "Reduce dimensions (e.g. PCA) or add reference samples.", min(len(a), len(b)), d,
+                )
             ref = np.empty(n)
             self._folds = []
             for fit_idx, eval_idx in ((a, b), (b, a)):
@@ -139,6 +176,13 @@ class Tier2Monitor:
                 ref[eval_idx] = _mahalanobis(Z[eval_idx], mu, prec)
             self._ref_maha = ref
         else:
+            if self.maha_threshold is None and not self.allow_small_reference:
+                raise ValueError(
+                    f"Tier2Monitor: {n} reference samples; calibrated thresholds need at least "
+                    f"{_MIN_CROSSFIT}. Below that the threshold is set on in-sample distances and "
+                    "false-alarms far above alpha. Add reference samples, pass a fixed "
+                    "maha_threshold, or pass allow_small_reference=True to accept this."
+                )
             logger.warning(
                 "Tier2Monitor: n=%d < %d, calibrating on in-sample distances (optimistic)",
                 n, _MIN_CROSSFIT,
@@ -157,8 +201,8 @@ class Tier2Monitor:
         """
         rng = np.random.default_rng(self.seed)
         n = len(values)
-        batch = values[rng.integers(0, n, size=(self.n_bootstrap, m))].mean(axis=1)
-        ref = values[rng.integers(0, n, size=(self.n_bootstrap, n))].mean(axis=1)
+        batch = _resampled_means(values, m, self.n_bootstrap, rng)
+        ref = _resampled_means(values, n, self.n_bootstrap, rng)
         return float(values.mean() + np.quantile(batch - ref, 1 - alpha))
 
     def _bootstrap_upper_clustered(self, values: np.ndarray, k: int, alpha: float) -> float:
@@ -190,9 +234,9 @@ class Tier2Monitor:
             raise ValueError("pass groups to both fit() and score(), or to neither")
 
         Z = finite(embeddings, "deployment embeddings")
-        if logits is not None:
-            finite(logits, "deployment logits")
         m = len(Z)
+        if logits is not None:
+            _check_logits(finite(logits, "deployment logits"), m, "deployment")
         if self._folds is not None:
             maha = np.empty(m)
             for k, (mu, prec) in enumerate(self._folds):

@@ -1,8 +1,39 @@
 # Changelog
 
-## Unreleased
+## Unreleased (0.1.2.dev0)
 
-### Fixed
+### Fixed (external review, 5 November 2026)
+- **Tier 2 below 40 reference samples** set its threshold on in-sample distances and false-alarmed in 44–100% of
+  clean batches at a nominal 5% (44–59% in 5 dimensions, 100% in 16), with only a log message. `fit` now raises,
+  unless `allow_small_reference=True` (or `t2_allow_small_reference=True` on `MonitorPipeline`) or a fixed
+  `maha_threshold` is given.
+- **Settings where Tier 1 could never flag** now raise: α/2 not above 1/(n_permutations + 1) (e.g. α = 0.005 with
+  200 permutations, which stayed silent on a 50σ shift), and cluster tests with so few clusters that the p-value
+  cannot fall below α/2 (2 slides per side allow 3 distinct splits).
+- **Tier 2 with one reference cluster** returned a NaN distance that never flags. It now raises.
+- **Logits with a different row count** from the embeddings were accepted. Tier 2 now raises.
+- **The CLI crashed on `.csv` input**: it imported pandas, which is not a dependency, and would have dropped the first
+  row as a header. CSV is now read with numpy; a header row is detected.
+- `guards.probabilities` named the wrong row for 2-D input.
+- Macenko normalization: a blank tile crashed with an IndexError, and 0–1 float images gave meaningless output.
+  Both now raise a clear error.
+- A batch of 1 gave Tier 1 a misleading "statistic is NaN" error; it now says each batch needs 2 samples.
+
+### Changed
+- Tier 2's bootstrap runs in chunks: memory no longer grows with reference size × `n_bootstrap` (about 0.64 GB at
+  20,000 reference tiles). Results are identical.
+- Tier 2 logs a warning when it falls back to per-dimension variances (half-reference size ≤ dimensions + 1).
+- `Tier1Monitor.save` writes the settings and the fitted reference to `.npz`; the new `Tier1Monitor.load` restores a
+  monitor that scores identically. The old JSON file held no reference and could not be loaded.
+- `DeltaGap` reports the sample standard deviation across seeds (ddof = 1; NaN for one seed), not the population one.
+- `bonferroni_correct`: docstring and return type now say it returns a decision per p-value.
+
+### Added
+- `wsidrift score --reference-groups / --deployment-groups`: one cluster id per row.
+- Tags `v0.1.0` and `v0.1.1` at the commits whose source matches the PyPI uploads; README table of which commit
+  first reported each number; pinned test environment, CI workflow and `CITATION.cff`.
+
+### Fixed (earlier)
 - **A NaN read as drift.** In 0.1.1, one NaN feature gave Tier 1 a NaN statistic; every comparison with NaN is false, so
   no permuted value exceeded it and the p-value came out as the smallest possible. A failed slide looked like the
   strongest signal there is. Tier 2 failed the other way: a NaN mean distance never flags, so the AND rule stayed silent

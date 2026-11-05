@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wsidrift"
-version = "0.1.1"
+version = "0.1.2.dev0"
 description = "Label-free validity monitor for computational pathology pipelines"
 readme = "README.md"
 license = "MIT"
@@ -27,8 +27,14 @@ dependencies = [
     "scikit-learn>=1.3.0",
 ]
 
+[project.urls]
+Repository = "https://github.com/athakur569/wsidrift"
+Changelog = "https://github.com/athakur569/wsidrift/blob/main/CHANGELOG.md"
+"Research repository" = "https://github.com/athakur569/stainrob-benchmark"
+
 [project.optional-dependencies]
 torch = ["torch>=2.0.0"]  # only for Tier2Monitor.from_encoder
+test = ["pytest>=7"]
 
 [project.scripts]
 wsidrift = "wsidrift.cli:main"

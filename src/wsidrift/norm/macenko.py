@@ -5,6 +5,13 @@ from __future__ import annotations
 import numpy as np
 
 
+def _check_image(image: np.ndarray) -> None:
+    if image.ndim != 3 or image.shape[-1] != 3:
+        raise ValueError(f"Macenko: expected an (H, W, 3) RGB image, got shape {image.shape}")
+    if np.issubdtype(image.dtype, np.floating) and image.size and image.max() <= 1.0:
+        raise ValueError("Macenko: values are 0–1 floats; pass 0–255 intensities (e.g. uint8)")
+
+
 class MacenkoNormalizer:
     """Normalize H&E patches to a reference stain using Macenko's SVD method.
 
@@ -41,8 +48,14 @@ class MacenkoNormalizer:
         return -np.log(img / 255.0)
 
     def _get_stain_matrix(self, image: np.ndarray) -> np.ndarray:
+        _check_image(image)
         od = self._rgb_to_od(image)
         od = od[np.all(od > self.beta, axis=1)]
+        if len(od) < 2:
+            raise ValueError(
+                f"Macenko: {len(od)} tissue pixels (optical density above beta = {self.beta} in all channels); "
+                "a blank or background tile has no stain to estimate"
+            )
         _, _, vt = np.linalg.svd(od, full_matrices=False)
         plane = vt[:2].T
         plane *= np.where(plane.sum(axis=0) < 0, -1.0, 1.0)  # SVD sign is arbitrary

@@ -55,13 +55,15 @@ class DeltaGap:
         if not self._in_auc:
             raise ValueError("No seeds added — call add_seed() first.")
         dg = [i - c for i, c in zip(self._in_auc, self._cross_auc)]
+        # Sample SD (ddof=1) across seeds; undefined (NaN) for a single seed.
+        sd = lambda v: float(np.std(v, ddof=1)) if len(v) > 1 else float("nan")  # noqa: E731
         return DeltaGapResult(
             condition=self.condition,
             cohort=self.cohort,
             auc_in_mean=float(np.mean(self._in_auc)),
-            auc_in_std=float(np.std(self._in_auc)),
+            auc_in_std=sd(self._in_auc),
             auc_cross_mean=float(np.mean(self._cross_auc)),
-            auc_cross_std=float(np.std(self._cross_auc)),
+            auc_cross_std=sd(self._cross_auc),
             delta_gap_mean=float(np.mean(dg)),
-            delta_gap_std=float(np.std(dg)),
+            delta_gap_std=sd(dg),
         )
