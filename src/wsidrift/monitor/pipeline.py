@@ -64,6 +64,7 @@ class MonitorPipeline:
         t1_wass_threshold: float | None = None,
         t2_maha_threshold: float | None = None,
         t2_energy_threshold: float | None = None,
+        t2_allow_small_reference: bool = False,
     ) -> None:
         self._t1 = Tier1Monitor(
             mmd_threshold=t1_mmd_threshold,
@@ -77,6 +78,7 @@ class MonitorPipeline:
             energy_threshold=t2_energy_threshold,
             alpha=alpha,
             seed=seed,
+            allow_small_reference=t2_allow_small_reference,
         )
         self._vm = ValidityMonitor(self._t1, self._t2, require_both=require_both)
 

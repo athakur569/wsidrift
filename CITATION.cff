@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use wsidrift, please cite the version you used. The commit for each release is in the README."
+title: "wsidrift: a label-free validity monitor for computational pathology pipelines"
+type: software
+authors:
+  - family-names: Thakur
+    given-names: Abhishek
+version: 0.1.1
+date-released: 2026-10-16
+license: MIT
+repository-code: "https://github.com/athakur569/wsidrift"
+keywords:
+  - digital pathology
+  - drift detection
+  - model monitoring
+  - whole-slide imaging

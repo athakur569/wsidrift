@@ -2,7 +2,7 @@
 
 A NaN that reaches a permutation test makes the observed statistic NaN. Every comparison with NaN is false, so no
 permuted value counts as exceeding it and the p-value comes out as the smallest possible: a failed slide reads as the
-strongest drift signal there is (ISS-057 in the CAMELYON17 rehearsal). A failed slide is not evidence about the batch,
+strongest drift signal there is (seen in a CAMELYON17 rehearsal run). A failed slide is not evidence about the batch,
 so the monitors stop and name it. They do not drop it, because a run of failed slides may be what needs attention.
 """
 
@@ -41,7 +41,7 @@ def finite_value(v: float, name: str) -> float:
 def probabilities(p, name: str, ids=None) -> np.ndarray:
     """``p`` as a float array, or ValueError if a value is not a probability."""
     a = finite(p, name, ids)
-    bad = (a < 0) | (a > 1)
+    bad = ((a < 0) | (a > 1)).reshape(len(a), -1).any(1)
     if bad.any():
         raise ValueError(f"{name}: values outside 0 to 1 in {_rows(bad, ids)}. "
                          "These look like logits or percentages, not probabilities.")
