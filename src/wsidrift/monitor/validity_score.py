@@ -57,7 +57,7 @@ class ValidityMonitor:
 
     Args:
         tier1: Fitted Tier1Monitor.
-        tier2: Fitted Tier2Monitor (optional; if absent, uses Tier 1 only).
+        tier2: Fitted Tier2Monitor (optional; if absent, Tier 1 alone decides).
         require_both: If True (default), flag only when BOTH tiers signal shift.
                       If False, OR logic — flag if either tier flags.
     """
@@ -77,22 +77,32 @@ class ValidityMonitor:
         X_deployment,
         embeddings=None,
         logits=None,
+        groups=None,
     ) -> ValidityResult:
         """Score a deployment batch.
 
         Args:
             X_deployment: Input features for Tier 1 (n, d).
-            embeddings:   Encoder embeddings for Tier 2 (n, emb_dim). Optional.
+            embeddings:   Encoder embeddings for Tier 2 (n, emb_dim). Required when a Tier 2 monitor is set
+                          (pass the Tier 1 features if Tier 2 was fitted on them).
             logits:       Classifier logits for energy score (n, n_classes). Optional.
+            groups:       Cluster id per sample (e.g. slide), for both tiers; required if, and only if, the
+                          monitors were fitted with groups. The features and embeddings must then have the same rows.
 
         Returns:
             ValidityResult with per-tier results and overall flag.
         """
-        t1 = self.tier1.score(X_deployment)
+        if self.tier2 is not None and embeddings is None:
+            raise ValueError("this ValidityMonitor has a Tier 2 monitor, so score() needs embeddings (the Tier 1 "
+                             "features, if Tier 2 was fitted on them); without them only Tier 1 would decide")
+        if groups is not None and embeddings is not None and len(embeddings) != len(X_deployment):
+            raise ValueError("groups give one cluster id per sample, so the features and embeddings must have the "
+                             f"same rows ({len(X_deployment)} and {len(embeddings)})")
+        t1 = self.tier1.score(X_deployment, groups=groups)
 
         t2 = None
-        if self.tier2 is not None and embeddings is not None:
-            t2 = self.tier2.score(embeddings, logits)
+        if self.tier2 is not None:
+            t2 = self.tier2.score(embeddings, logits, groups=groups)
 
         if t2 is None:
             overall_flag = t1.flagged

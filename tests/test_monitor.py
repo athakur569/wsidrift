@@ -119,6 +119,29 @@ class TestValidityMonitor:
         assert result.validity_score == 1.0
 
 
+class TestValidityMonitorInputs:
+    def test_tier2_without_embeddings_refused(self):
+        tier1 = Tier1Monitor(n_permutations=49).fit(_gaussian(100, 8, seed=0))
+        tier2 = Tier2Monitor().fit(_gaussian(100, 8, seed=0))
+        with pytest.raises(ValueError, match="needs embeddings"):
+            ValidityMonitor(tier1, tier2).score(_gaussian(40, 8, seed=1))
+
+    def test_groups_go_to_both_tiers(self):
+        Xr, gr = _clustered(12, 10, 3, seed=0)
+        Xd, gd = _clustered(6, 10, 3, seed=1)
+        vm = ValidityMonitor(Tier1Monitor(n_permutations=49).fit(Xr, groups=gr), Tier2Monitor().fit(Xr, groups=gr))
+        assert isinstance(vm.score(Xd, embeddings=Xd, groups=gd).overall_flag, bool)
+        with pytest.raises(ValueError, match="both"):
+            vm.score(Xd, embeddings=Xd)
+
+    def test_groups_need_matching_rows(self):
+        Xr, gr = _clustered(12, 10, 3, seed=0)
+        Xd, gd = _clustered(6, 10, 3, seed=1)
+        vm = ValidityMonitor(Tier1Monitor(n_permutations=49).fit(Xr, groups=gr), Tier2Monitor().fit(Xr, groups=gr))
+        with pytest.raises(ValueError, match="same rows"):
+            vm.score(Xd, embeddings=Xd[:30], groups=gd)
+
+
 def _clustered(n_clusters, per, dim, seed, effect=1.0, noise=0.3):
     """Null data with strong cluster effects: every cluster (slide) has its own offset."""
     r = np.random.default_rng(seed)

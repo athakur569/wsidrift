@@ -52,6 +52,12 @@ class MonitorPipeline:
 
     Thresholds are calibrated at false-alarm rate ``alpha`` unless fixed
     thresholds are passed (both Tier 1 thresholds must be set together).
+
+    ``groups`` (one cluster id per sample, e.g. the slide or patient a tile came from) are passed to
+    both tiers; tiles of one slide are correlated, and without groups the tiers treat them as
+    independent and false-alarm above ``alpha``. ``score`` must be given the same kinds of input as
+    ``fit``: embeddings, logits and groups each go to both or to neither, so Tier 2 never scores
+    features against an embedding model or silently drops the energy check.
     """
 
     def __init__(
@@ -79,16 +85,24 @@ class MonitorPipeline:
             seed=seed,
         )
         self._vm = ValidityMonitor(self._t1, self._t2, require_both=require_both)
+        self._fixed_energy = t2_energy_threshold is not None
+        self._inputs: dict | None = None
 
     def fit(
         self,
         reference_features: np.ndarray,
         reference_embeddings: np.ndarray | None = None,
         reference_logits: np.ndarray | None = None,
+        groups: np.ndarray | None = None,
     ) -> "MonitorPipeline":
-        self._t1.fit(reference_features)
         emb = reference_features if reference_embeddings is None else reference_embeddings
-        self._t2.fit(emb, reference_logits)
+        _check_rows(reference_features, emb, groups, "reference")
+        self._t1.fit(reference_features, groups=groups)
+        self._t2.fit(emb, reference_logits, groups=groups)
+        # A fixed energy threshold also asks for logits at score time.
+        self._inputs = {"embeddings": reference_embeddings is not None,
+                        "logits": reference_logits is not None or self._fixed_energy,
+                        "groups": groups is not None}
         return self
 
     def score(
@@ -96,6 +110,34 @@ class MonitorPipeline:
         features: np.ndarray,
         embeddings: np.ndarray | None = None,
         logits: np.ndarray | None = None,
+        groups: np.ndarray | None = None,
     ) -> PipelineResult:
+        if self._inputs is None:
+            raise RuntimeError("Call fit() before score()")
+        given = {"embeddings": embeddings is not None, "logits": logits is not None, "groups": groups is not None}
+        for kind in ("embeddings", "logits", "groups"):
+            if given[kind] != self._inputs[kind]:
+                raise ValueError(_MISMATCH[kind][self._inputs[kind]])
         emb = features if embeddings is None else embeddings
-        return PipelineResult(validity=self._vm.score(features, embeddings=emb, logits=logits))
+        return PipelineResult(validity=self._vm.score(features, embeddings=emb, logits=logits, groups=groups))
+
+
+_MISMATCH = {   # kind → {was it given at fit: message}
+    "embeddings": {True: "fit() was given reference_embeddings, so score() needs embeddings; without them Tier 2 "
+                         "would score the features against the embedding model",
+                   False: "fit() used the features for Tier 2, so score() takes no embeddings; refit with "
+                          "reference_embeddings to score embeddings"},
+    "logits": {True: "Tier 2 checks energy (reference logits at fit(), or a fixed energy threshold), so score() needs "
+                     "logits; without them the energy check would be dropped silently",
+               False: "fit() had no reference logits, so the logits would not be used; refit with reference_logits "
+                      "to check energy"},
+    "groups": {True: "fit() was given groups, so score() needs groups (one cluster id per deployment sample)",
+               False: "fit() had no groups, so score() takes none; refit with groups for clustered samples"},
+}
+
+
+def _check_rows(features: np.ndarray, embeddings: np.ndarray, groups, which: str) -> None:
+    """With groups, every sample needs a feature row and an embedding row, both under one cluster id."""
+    if groups is not None and len(features) != len(embeddings):
+        raise ValueError(f"groups give one cluster id per sample, so the {which} features and embeddings must have "
+                         f"the same rows ({len(features)} and {len(embeddings)})")
