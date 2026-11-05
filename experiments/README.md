@@ -15,7 +15,7 @@ python experiments/null_false_alarms.py
 | `combined_false_alarms.py` | The combined flag with no shift, AND against OR; 16 and 64 dimensions, references of 500, batches of 100 | AND 0.2% and 0.8%, OR 7.8% and 11.0%; Tier 2 alone 4.2% and 8.2% | README, How it works |
 | `and_rule_power.py` | Detection when one tier is blind: mean shift and shrinking spread; 64 dimensions, reference 500, batches of 100, 200 runs | spread × 0.8, × 0.5, × 0.01: Tier 1 100%, Tier 2 0%, AND 0%; mean + 0.1: Tier 1 97%, AND 14%. A prototype two-sided Tier 2 (not in the package) flags the spread changes in 100% with 6% false alarms | README, Limitations |
 | `clustered_false_alarms.py` | Tile-level against cluster-level calibration with strong slide effects and no shift; α = 0.10, 200 deployments, 40 reference slides | Tier 1 100% → 6%, Tier 2 52% → 11% | CHANGELOG |
-| `tier1_runtime.py` | Tier 1's run time on 1,000 × 200 samples with 2,048 features | machine-dependent; prints the processor | README, Limitations |
+| `tier1_runtime.py` | Tier 1's run time on 1,000 × 200 samples with 2,048 features | 13.4 s on an Apple-silicon Mac (5 Nov 2026); machine-dependent, prints the processor | README, Limitations |
 
 The CAMELYON17 no-shift check on real tiles (82% and 100% tile-level, 5% and 2% with slide groups) needs the study's
 tile features, so its script lives in the research repository:

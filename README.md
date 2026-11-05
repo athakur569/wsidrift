@@ -90,7 +90,7 @@ On synthetic Gaussian data at α = 0.05 (16 dimensions, 1,000 fresh reference se
 | Tier 2 by reference size: 60–100% below 40 samples, 4.6–7.7% from 40 to 200 | above, Limitations | this table | `experiments/tier2_reference_size.py` |
 | Combined flag with no shift: AND 0.2% / 0.8%, OR 7.8% / 11.0% | How it works | this table | `experiments/combined_false_alarms.py` |
 | AND rule against shrinking spread: Tier 1 100%, AND 0% | Limitations | this table | `experiments/and_rule_power.py` |
-| Runtime about 13 s (1,000 × 200 samples, 2,048 features) | Limitations | `4db4e95` | `experiments/tier1_runtime.py` (machine-dependent) |
+| Runtime about 13 s (1,000 × 200 samples, 2,048 features) | Limitations | `4db4e95` | `experiments/tier1_runtime.py` (13.4 s on an Apple-silicon Mac, 5 Nov; machine-dependent) |
 | Clustered simulation: Tier 1 100% → 6%, Tier 2 52% → 11% | CHANGELOG | `737321c` | `experiments/clustered_false_alarms.py` |
 | CAMELYON17 no-shift check: 82% / 100% → 5% / 2% | Limitations, CHANGELOG | `cc29c11` | stainrob-benchmark [`scripts/null_check_tile_vs_slide.py`](https://github.com/athakur569/stainrob-benchmark/blob/9a8cf62b4eb07b4b5318593b365e2328de19e1d0/scripts/null_check_tile_vs_slide.py), from the training-split features of its `scripts/extract_tier1.py`; reproduced 5 Nov |
 
@@ -125,7 +125,7 @@ Until a number has a script, treat it as reported, not reproducible from this re
   conjunction rule have been tested on simulated data only. Detection of real, harmful shifts is the subject
   of ongoing work and is not yet demonstrated.
 - Assumes covariate shift: the input distribution changes while the relationship between inputs and labels stays the same. This is reasonable for stain and scanner variation, and doesn't hold for changes in label definitions.
-- Tier 1 runs a permutation test, so it costs more on large batches: about 13 seconds for 1,000 reference and 200 deployment samples with 2,048-dimensional features (`experiments/tier1_runtime.py`; the time depends on the machine).
+- Tier 1 runs a permutation test, so it costs more on large batches: about 13 seconds for 1,000 reference and 200 deployment samples with 2,048-dimensional features (`experiments/tier1_runtime.py`: 13.4 s on an Apple-silicon Mac, 5 Nov 2026; the time depends on the machine).
 - Tier 2's Mahalanobis statistic is less sensitive than Tier 1 to small shifts spread across many dimensions.
 
 ## License
