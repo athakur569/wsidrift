@@ -63,7 +63,7 @@ def main(argv: list[str] | None = None) -> None:
     if args.command == "score":
         import numpy as np
         from wsidrift.monitor.divergence import Tier1Monitor
-        from wsidrift.monitor.validity_score import ValidityMonitor, ValidityResult
+        from wsidrift.monitor.validity_score import ValidityMonitor
 
         try:
             X_ref = _load_features(args.reference)
@@ -82,13 +82,7 @@ def main(argv: list[str] | None = None) -> None:
         try:
             if (g_ref is None) != (g_dep is None):
                 raise ValueError("pass --reference-groups and --deployment-groups together, or neither")
-            if g_ref is None:
-                result = ValidityMonitor(tier1.fit(X_ref)).score(X_dep)
-            else:
-                # Tier 1 only, as ValidityMonitor without Tier 2: the result is the Tier 1 decision.
-                t1 = tier1.fit(X_ref, groups=g_ref).score(X_dep, groups=g_dep)
-                result = ValidityResult(tier1=t1, tier2=None, overall_flag=t1.flagged,
-                                        validity_score=float(t1.flagged))
+            result = ValidityMonitor(tier1.fit(X_ref, groups=g_ref)).score(X_dep, groups=g_dep)
         except ValueError as e:
             sys.exit(str(e))
         print(result.summary_line())

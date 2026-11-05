@@ -3,8 +3,9 @@
 ## Unreleased (0.1.2.dev0)
 
 ### Fixed (external review, 5 November 2026)
-- **Tier 2 below 40 reference samples** set its threshold on in-sample distances and false-alarmed in 44–100% of
-  clean batches at a nominal 5% (44–59% in 5 dimensions, 100% in 16), with only a log message. `fit` now raises,
+- **Tier 2 below 40 reference samples** set its threshold on in-sample distances and false-alarmed in 60–100% of
+  clean batches at a nominal 5% (60–79% in 5 dimensions with 20–30 samples, 100% in 16;
+  `experiments/tier2_reference_size.py`), with only a log message. `fit` now raises,
   unless `allow_small_reference=True` (or `t2_allow_small_reference=True` on `MonitorPipeline`) or a fixed
   `maha_threshold` is given.
 - **Settings where Tier 1 could never flag** now raise: α/2 not above 1/(n_permutations + 1) (e.g. α = 0.005 with
@@ -18,6 +19,13 @@
 - Macenko normalization: a blank tile crashed with an IndexError, and 0–1 float images gave meaningless output.
   Both now raise a clear error.
 - A batch of 1 gave Tier 1 a misleading "statistic is NaN" error; it now says each batch needs 2 samples.
+- **`MonitorPipeline.score` accepted inputs that differ from `fit`.** Fitted with `reference_embeddings` but scored
+  without `embeddings`, Tier 2 scored the features against the embedding model (silently, if the widths matched);
+  reference logits at `fit` but none at `score` dropped the energy check without a word. `score` now refuses any
+  difference in embeddings, logits or groups and says which. A `ValidityMonitor` with a Tier 2 monitor now refuses a
+  call without embeddings instead of quietly deciding on Tier 1 alone.
+- **README's synthetic false-alarm rates corrected to what their script reproduces:** 3.6% (Tier 1) and 4.8%
+  (Tier 2) over 1,000 reference sets, not 2.5% and 5.4%, whose settings were not recorded.
 
 ### Changed
 - Tier 2's bootstrap runs in chunks: memory no longer grows with reference size × `n_bootstrap` (about 0.64 GB at
@@ -30,6 +38,10 @@
 
 ### Added
 - `wsidrift score --reference-groups / --deployment-groups`: one cluster id per row.
+- `groups` through `MonitorPipeline.fit/score` and `ValidityMonitor.score`, to both tiers (the features and
+  embeddings must then have the same rows). The CLI passes its groups through `ValidityMonitor`.
+- `experiments/`: one script per synthetic number in this file and the README, with fixed seeds and settings (see
+  `experiments/README.md`).
 - Tags `v0.1.0` and `v0.1.1` at the commits whose source matches the PyPI uploads; README table of which commit
   first reported each number; pinned test environment, CI workflow and `CITATION.cff`.
 
@@ -50,7 +62,8 @@
   slides): Tier 1 false alarms 100% tile-level vs 6% cluster-level; Tier 2 52% vs 11%.
   Calls without `groups` behave as before.
   Real-data check (CAMELYON17 training slides split into random halves, no shift, 40 splits, nominal 10%):
-  Tier 1 on pixel statistics 82% tile-level vs 5% with slide groups; on DenseNet-121 features 100% vs 2%.
+  Tier 1 on pixel statistics 82% tile-level vs 5% with slide groups; on DenseNet-121 features 100% vs 2%
+  (stainrob-benchmark `scripts/null_check_tile_vs_slide.py`).
 
 ## 0.1.1 — pre-alpha
 
