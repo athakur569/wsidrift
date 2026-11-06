@@ -118,8 +118,8 @@ Until a number has a script, treat it as reported, not reproducible from this re
   one-sided rule. With 0.1.1, read Tier 1 and Tier 2 separately, or use `require_both=False`.
 - **The AND rule catches no more than its weaker tier.** A shift that Tier 2 barely registers in either direction
   goes unflagged even when Tier 1 sees it clearly: a mean shift of 0.1 in every dimension is flagged by Tier 1 in 97%
-  of runs and by the AND rule in 12% (same script). Requiring both tiers lowers false alarms (0.5–1% with no shift,
-  against 9.5–10% for OR); it never adds detections.
+  of runs and by the AND rule in 12% (same script). Requiring both tiers lowers false alarms (0.2–0.5% with no shift,
+  against 8.0–9.5% for OR; `experiments/combined_false_alarms.py`); it never adds detections.
 - **Small reference sets are refused.** Tier 2 needs at least 40 reference samples to calibrate its threshold
   out of sample; below that it false-alarmed in 50–71% of clean batches in 5 dimensions and 100% in 16, at a
   nominal 5% (`experiments/tier2_reference_size.py`). `main` raises an error
