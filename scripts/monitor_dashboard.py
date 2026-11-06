@@ -55,7 +55,8 @@ def main() -> None:
     print(f"    Tier 1 flagged : {r1.flagged}")
     print("-" * 64)
     print("  TIER 2 — Model Response (calibrated thresholds)")
-    print(f"    Mahalanobis    : {r2.mahalanobis_mean:.4f}   threshold {r2.threshold_maha:.4f}")
+    low = "" if r2.threshold_maha_low is None else f"{r2.threshold_maha_low:.4f} – "
+    print(f"    Mahalanobis    : {r2.mahalanobis_mean:.4f}   flags outside {low}{r2.threshold_maha:.4f}")
     if r2.energy_mean is not None:
         print(f"    Energy score   : {r2.energy_mean:.4f}   threshold {r2.threshold_energy:.4f}")
     print(f"    Tier 2 flagged : {r2.flagged}")

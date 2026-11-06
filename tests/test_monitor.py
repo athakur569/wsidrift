@@ -100,6 +100,49 @@ class TestTier2Monitor:
         assert result.energy_mean is None
 
 
+class TestTier2TwoSided:
+    """A batch less spread out than the reference (blank, blurred, near-duplicate tiles) has unusually small distances."""
+
+    def test_contracted_batch_is_flagged_below(self):
+        monitor = Tier2Monitor().fit(_gaussian(500, 16, seed=0))
+        result = monitor.score(0.5 * _gaussian(100, 16, seed=1))
+        assert result.flagged and result.mahalanobis_flagged
+        assert result.mahalanobis_mean < result.threshold_maha_low < result.threshold_maha
+
+    def test_collapsed_batch_is_flagged(self):
+        Z = _gaussian(500, 16, seed=0)
+        monitor = Tier2Monitor().fit(Z)
+        assert monitor.score(Z.mean(0) + 0.01 * _gaussian(100, 16, seed=1)).flagged
+
+    def test_two_sided_with_groups(self):
+        Xr, gr = _clustered(40, 15, 3, seed=0)
+        Xd, gd = _clustered(12, 15, 3, seed=1)
+        monitor = Tier2Monitor().fit(Xr, groups=gr)
+        result = monitor.score(Xr.mean(0) + 0.05 * (Xd - Xd.mean(0)), groups=gd)
+        assert result.flagged and result.mahalanobis_mean < result.threshold_maha_low
+
+    def test_two_tails_from_the_same_draws(self):
+        monitor = Tier2Monitor(alpha=0.1).fit(_gaussian(300, 8, seed=0))
+        result = monitor.score(_gaussian(60, 8, seed=1))
+        d = monitor._bootstrap_differences(monitor._ref_maha, 60)
+        base = monitor._ref_maha.mean()
+        assert result.threshold_maha == pytest.approx(base + np.quantile(d, 0.95))
+        assert result.threshold_maha_low == pytest.approx(base + np.quantile(d, 0.05))
+
+    def test_fixed_threshold_stays_one_sided(self):
+        monitor = Tier2Monitor(maha_threshold=10.0).fit(_gaussian(500, 16, seed=0))
+        result = monitor.score(0.01 * _gaussian(100, 16, seed=1))
+        assert result.threshold_maha_low is None and not result.flagged
+
+    def test_null_false_alarms_two_sided(self):
+        flags = []
+        for s in range(60):
+            r = np.random.default_rng(s)
+            flags.append(Tier2Monitor(alpha=0.1, seed=s).fit(r.standard_normal((400, 8)))
+                         .score(r.standard_normal((50, 8))).flagged)
+        assert np.mean(flags) <= 0.25
+
+
 class TestValidityMonitor:
     def test_conjunction_requires_both(self):
         tier1 = Tier1Monitor(mmd_threshold=0.5, wass_threshold=1.0).fit(_gaussian(200, 32, seed=0))

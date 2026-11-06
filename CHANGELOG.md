@@ -3,8 +3,8 @@
 ## Unreleased (0.1.2.dev0)
 
 ### Fixed (external review, 5 November 2026)
-- **Tier 2 below 40 reference samples** set its threshold on in-sample distances and false-alarmed in 60–100% of
-  clean batches at a nominal 5% (60–79% in 5 dimensions with 20–30 samples, 100% in 16;
+- **Tier 2 below 40 reference samples** set its threshold on in-sample distances and false-alarmed in 50–100% of
+  clean batches at a nominal 5% (50–71% in 5 dimensions with 20–30 samples, 100% in 16, two-sided;
   `experiments/tier2_reference_size.py`), with only a log message. `fit` now raises,
   unless `allow_small_reference=True` (or `t2_allow_small_reference=True` on `MonitorPipeline`) or a fixed
   `maha_threshold` is given.
@@ -24,10 +24,20 @@
   reference logits at `fit` but none at `score` dropped the energy check without a word. `score` now refuses any
   difference in embeddings, logits or groups and says which. A `ValidityMonitor` with a Tier 2 monitor now refuses a
   call without embeddings instead of quietly deciding on Tier 1 alone.
-- **README's synthetic false-alarm rates corrected to what their script reproduces:** 3.6% (Tier 1) and 4.8%
-  (Tier 2) over 1,000 reference sets, not 2.5% and 5.4%, whose settings were not recorded.
+- **README's synthetic false-alarm rates corrected to what their script reproduces:** 3.6% (Tier 1) and 6.0%
+  (Tier 2, two-sided; 4.8% one-sided) over 1,000 reference sets, not 2.5% and 5.4%, whose settings were not
+  recorded.
 
 ### Changed
+- **Tier 2's Mahalanobis check is two-sided** (decided 6 November 2026). It flags a batch whose mean distance from the
+  reference is unusually large or unusually small, each tail at half the Mahalanobis share of α, both from the same
+  cross-fitted bootstrap. One-sided, it could never flag a batch less spread out than the reference (blank, blurred or
+  near-duplicate tiles), so the default AND rule stayed silent whatever Tier 1 saw: in `experiments/and_rule_power.py`
+  spread × 0.8, × 0.5 and × 0.01 were flagged by the AND rule in 0% of runs; now in 100%. With no shift Tier 2
+  false-alarms in 6.0% at α = 0.05 (`experiments/null_false_alarms.py`; one-sided 4.8%), and a mean shift that only
+  Tier 1 sees well is flagged by the AND rule in 12% (one-sided 14%). The energy check stays one-sided, and a fixed
+  `maha_threshold` keeps the old upper-only rule. `Tier2Result` gains `threshold_maha_low` (None in fixed mode), and
+  `mahalanobis_flagged` covers both tails. Behaviour change: a batch that shrinks now alarms.
 - Tier 2's bootstrap runs in chunks: memory no longer grows with reference size × `n_bootstrap` (about 0.64 GB at
   20,000 reference tiles). Results are identical.
 - Tier 2 logs a warning when it falls back to per-dimension variances (half-reference size ≤ dimensions + 1).
@@ -59,7 +69,8 @@
   treat them as independent and false-alarm far above `alpha`. With groups, Tier 1 permutes whole
   clusters, and Tier 2 cross-fits by cluster and bootstraps its batch threshold over clusters.
   Simulation with strong slide effects and no real shift, alpha = 0.10 (200 deployments, 40 reference
-  slides): Tier 1 false alarms 100% tile-level vs 6% cluster-level; Tier 2 52% vs 11%.
+  slides): Tier 1 false alarms 100% tile-level vs 6% cluster-level; Tier 2 64% vs 6% (two-sided; 52% vs 11% with
+  the one-sided rule first measured).
   Calls without `groups` behave as before.
   Real-data check (CAMELYON17 training slides split into random halves, no shift, 40 splits, nominal 10%):
   Tier 1 on pixel statistics 82% tile-level vs 5% with slide groups; on DenseNet-121 features 100% vs 2%

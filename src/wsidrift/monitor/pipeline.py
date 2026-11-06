@@ -36,6 +36,7 @@ class PipelineResult:
             "t1_flagged": self.tier1.flagged,
             "t2_mahalanobis": self.tier2.mahalanobis_mean,
             "t2_mahalanobis_threshold": self.tier2.threshold_maha,
+            "t2_mahalanobis_threshold_low": self.tier2.threshold_maha_low,
             "t2_energy": self.tier2.energy_mean,
             "t2_energy_threshold": self.tier2.threshold_energy,
             "t2_flagged": self.tier2.flagged,

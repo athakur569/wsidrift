@@ -45,9 +45,13 @@ from reference behavior. Requires encoder embeddings and optionally logits.
 - **Energy score** (E = −T log Σexp(logits/T); Liu et al. NeurIPS 2020). Higher energy
   means more out-of-distribution. Used only when reference logits are supplied at fit time.
 - **Flag:** reference distances are computed out-of-sample with two half-data models
-  (2-fold cross-fitting), and deployment samples are scored with the same two models. The
-  threshold for a batch of size m is a bootstrap (1 − α) quantile of the difference between
-  a size-m batch mean and the reference mean, so reference sampling error is included.
+  (2-fold cross-fitting), and deployment samples are scored with the same two models. A
+  batch of size m is compared with the bootstrap distribution of the difference between a
+  size-m batch mean and the reference mean, so reference sampling error is included. The
+  Mahalanobis check is two-sided (α/2 per tail): it flags a batch that sits unusually far
+  from the reference and one that is unusually concentrated near its centre (blank, blurred
+  or near-duplicate tiles), which an upper-only rule could never flag. The energy check is
+  upper-only.
 
 ### Conjunction Rule
 Flags "likely invalid" when Tier 1 AND Tier 2 both flag. Requiring both lowers the

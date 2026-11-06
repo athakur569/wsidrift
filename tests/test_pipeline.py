@@ -41,6 +41,13 @@ class TestMonitorPipeline:
         )
         assert result.tier1.flagged and not result.tier2.flagged and not result.invalid
 
+    def test_and_rule_catches_a_contracted_batch(self):
+        # Tier 1 sees the narrower spread and two-sided Tier 2 sees the small distances, so AND flags.
+        pipe = MonitorPipeline(n_permutations=99).fit(_make_embeddings(500, d=16, seed=0))
+        result = pipe.score(0.5 * _make_embeddings(100, d=16, seed=1))
+        assert result.tier1.flagged and result.tier2.flagged and result.invalid
+        assert result.summary()["t2_mahalanobis_threshold_low"] is not None
+
     def test_fixed_thresholds_still_supported(self):
         pipe = MonitorPipeline(t1_mmd_threshold=0.1, t1_wass_threshold=0.5, t2_maha_threshold=1.0)
         pipe.fit(_make_embeddings(200, d=16, seed=0))

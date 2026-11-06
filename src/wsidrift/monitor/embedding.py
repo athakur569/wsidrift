@@ -5,9 +5,15 @@ internal representation, not just the raw input distribution.
 
 By default thresholds are calibrated on the reference set at false-alarm rate
 ``alpha``: reference Mahalanobis distances are computed out-of-sample (2-fold
-cross-fitting), and the threshold for a deployment batch of size m is the
-(1 − α) quantile of bootstrap batch means of size m. Passing explicit thresholds
-switches to fixed-threshold mode.
+cross-fitting), and a deployment batch of size m is compared with the bootstrap
+distribution of batch means of size m. The Mahalanobis check is two-sided: it flags
+a batch whose mean distance is unusually large (the batch sits away from the
+reference) or unusually small (the batch is less spread out than the reference, as
+blank, blurred or near-duplicate tiles can be), each tail at half its share of
+``alpha``. One-sided, it could never flag the second kind, and neither could an AND
+rule built on it. The energy check stays one-sided (out-of-distribution inputs have
+higher energy). Passing explicit thresholds switches to fixed-threshold mode, which
+keeps the Mahalanobis check one-sided (upper).
 """
 
 from __future__ import annotations
@@ -33,10 +39,12 @@ class Tier2Result:
     flagged: bool
     threshold_maha: float
     threshold_energy: float | None
+    threshold_maha_low: float | None = None   # lower Mahalanobis threshold (calibrated mode); None when fixed
 
     @property
     def mahalanobis_flagged(self) -> bool:
-        return self.mahalanobis_mean > self.threshold_maha
+        low = self.threshold_maha_low is not None and self.mahalanobis_mean < self.threshold_maha_low
+        return self.mahalanobis_mean > self.threshold_maha or low
 
     @property
     def energy_flagged(self) -> bool:
@@ -193,24 +201,18 @@ class Tier2Monitor:
         logger.info("Tier2Monitor fitted: %d samples, dim=%d", n, d)
         return self
 
-    def _bootstrap_upper(self, values: np.ndarray, m: int, alpha: float) -> float:
-        """Upper (1 − α) threshold for a batch mean of size m.
-
-        Bootstraps the difference between a size-m batch mean and a size-n reference
-        mean, so the threshold accounts for the reference itself being a finite sample.
-        """
+    def _bootstrap_differences(self, values: np.ndarray, m: int) -> np.ndarray:
+        """Bootstrap draws of (size-m batch mean − size-n reference mean), so thresholds account for the reference
+        itself being a finite sample. A threshold at quantile q is ``values.mean() + quantile(draws, q)``."""
         rng = np.random.default_rng(self.seed)
         n = len(values)
         batch = _resampled_means(values, m, self.n_bootstrap, rng)
         ref = _resampled_means(values, n, self.n_bootstrap, rng)
-        return float(values.mean() + np.quantile(batch - ref, 1 - alpha))
+        return batch - ref
 
-    def _bootstrap_upper_clustered(self, values: np.ndarray, k: int, alpha: float) -> float:
-        """Upper (1 − α) threshold for the mean over a batch of ``k`` clusters (slides).
-
-        As ``_bootstrap_upper``, but whole reference clusters are drawn, so correlation between
-        tiles of one cluster is reflected in the threshold.
-        """
+    def _bootstrap_differences_clustered(self, values: np.ndarray, k: int) -> np.ndarray:
+        """As ``_bootstrap_differences`` for a batch of ``k`` clusters (slides): whole reference clusters are drawn, so
+        correlation between tiles of one cluster is reflected in the thresholds."""
         rng = np.random.default_rng(self.seed)
         uniq, inv = np.unique(self._ref_groups, return_inverse=True)
         sums = np.bincount(inv, weights=values)
@@ -220,7 +222,7 @@ class Tier2Monitor:
         br = rng.integers(0, c, size=(self.n_bootstrap, c))
         batch = sums[bd].sum(1) / sizes[bd].sum(1)
         ref = sums[br].sum(1) / sizes[br].sum(1)
-        return float(values.mean() + np.quantile(batch - ref, 1 - alpha))
+        return batch - ref
 
     def score(self, embeddings: np.ndarray, logits: np.ndarray | None = None,
               groups: np.ndarray | None = None) -> Tier2Result:
@@ -251,29 +253,38 @@ class Tier2Monitor:
             else:
                 energy_mean = float(energy(logits).mean())
 
-        # Split alpha across the statistics actually in use.
+        # Split alpha across the statistics actually in use; the Mahalanobis share is split over its two tails.
         n_stats = 2 if energy_mean is not None else 1
         a = self.alpha / n_stats
         if groups is None:
-            upper = lambda v: self._bootstrap_upper(v, m, a)  # noqa: E731
+            draws = lambda v: self._bootstrap_differences(v, m)  # noqa: E731
         else:
             if len(groups) != m:
                 raise ValueError("groups must have one entry per deployment sample")
             k = len(np.unique(groups))
-            upper = lambda v: self._bootstrap_upper_clustered(v, k, a)  # noqa: E731
-        t_maha = self.maha_threshold if self.maha_threshold is not None else upper(self._ref_maha)
+            draws = lambda v: self._bootstrap_differences_clustered(v, k)  # noqa: E731
+        if self.maha_threshold is not None:
+            t_maha, t_maha_low = self.maha_threshold, None
+        else:
+            d = draws(self._ref_maha)
+            base = self._ref_maha.mean()
+            t_maha, t_maha_low = float(base + np.quantile(d, 1 - a / 2)), float(base + np.quantile(d, a / 2))
         t_energy = None
         if energy_mean is not None:
-            t_energy = self.energy_threshold if self.energy_threshold is not None else upper(self._ref_energy)
+            t_energy = (self.energy_threshold if self.energy_threshold is not None
+                        else float(self._ref_energy.mean() + np.quantile(draws(self._ref_energy), 1 - a)))
 
-        flagged = bool(maha.mean() > t_maha or (energy_mean is not None and energy_mean > t_energy))
+        mean = float(maha.mean())
+        flagged = bool(mean > t_maha or (t_maha_low is not None and mean < t_maha_low)
+                       or (energy_mean is not None and energy_mean > t_energy))
         return Tier2Result(
-            mahalanobis_mean=float(maha.mean()),
+            mahalanobis_mean=mean,
             mahalanobis_max=float(maha.max()),
             energy_mean=energy_mean,
             flagged=flagged,
             threshold_maha=float(t_maha),
             threshold_energy=None if t_energy is None else float(t_energy),
+            threshold_maha_low=t_maha_low,
         )
 
     @classmethod
