@@ -209,8 +209,9 @@ class Tier1Monitor:
                 f"{1 / (self.n_permutations + 1):.4f}, not below alpha/2 = {self.alpha / 2:.4f}, so Tier 1 "
                 f"could never flag. Use at least {math.ceil(2 / self.alpha)} permutations."
             )
-        if groups is None:
-            # Tiny batches allow few distinct splits too (see the cluster check below).
+        if groups is None and min(n, m) <= 20:
+            # Tiny batches allow few distinct splits too (see the cluster check below). Above 20 a side there
+            # are over 10^11 splits, far beyond any alpha, so the (large) count is not computed.
             distinct = math.comb(n + m, n) // (2 if n == m else 1)
             if 1 / distinct >= self.alpha / 2:
                 raise ValueError(
