@@ -82,12 +82,17 @@ On synthetic Gaussian data at α = 0.05 (16 dimensions, 1,000 fresh reference se
 |---|---|---|
 | 0.1.0 (PyPI, tag `v0.1.0`) | `10d4e42` | The uploaded source matches this commit file for file. |
 | 0.1.1 (PyPI, tag `v0.1.1`) | `b85875f` | The uploaded source matches this commit file for file. The commit titled "release: 0.1.1" (`4db4e95`) is four commits earlier. |
+
+Check either release yourself with `python tools/verify_pypi_release.py 0.1.1` (from a clone with tags): it downloads
+the source archive from PyPI and compares it with the tagged commit file for file. If you use `main`, cite its commit
+hash as well as the version, since `main` is ahead of the last release.
 | 0.1.2.dev0 (`main`) | — | Adds `groups`, input guards and the fixes in the CHANGELOG. Not on PyPI. |
 
 | Number | Where | First reported in | Script |
 |---|---|---|---|
 | False-alarm rates with no shift, synthetic: 3.6% (Tier 1) and 6.0% (Tier 2, two-sided) | above | `4db4e95` (as 2.5% and 5.4%, settings not recorded) | `experiments/null_false_alarms.py` |
 | Tier 2 by reference size: 50–100% below 40 samples, 4.5–7.3% from 40 to 200 | above, Limitations | this table | `experiments/tier2_reference_size.py` |
+| Tier 2 with groups, by reference clusters: up to 81% below 12, 4–9% from 12 (α = 0.05) | Limitations | this table | `experiments/tier2_reference_clusters.py` |
 | Combined flag with no shift: AND 0.2% / 0.5%, OR 8.0% / 9.5% | How it works | this table | `experiments/combined_false_alarms.py` |
 | AND rule against shrinking spread: 100% (two-sided Tier 2); 0% under 0.1.1's one-sided rule | Limitations | this table | `experiments/and_rule_power.py` |
 | Runtime about 13 s (1,000 × 200 samples, 2,048 features) | Limitations | `4db4e95` | `experiments/tier1_runtime.py` (13.4 s on an Apple-silicon Mac, 5 Nov; machine-dependent) |
@@ -122,9 +127,11 @@ Until a number has a script, treat it as reported, not reproducible from this re
   against 8.0–9.5% for OR; `experiments/combined_false_alarms.py`); it never adds detections.
 - **Small reference sets are refused.** Tier 2 needs at least 40 reference samples to calibrate its threshold
   out of sample; below that it false-alarmed in 50–71% of clean batches in 5 dimensions and 100% in 16, at a
-  nominal 5% (`experiments/tier2_reference_size.py`). `main` raises an error
-  instead (pass `allow_small_reference=True` to override). Tier 1 refuses settings in which it could never flag:
-  too few permutations for α, or too few clusters for a cluster permutation test.
+  nominal 5% (`experiments/tier2_reference_size.py`). With `groups`, it also needs at least 12 reference clusters
+  (slides): with fewer, and strong slide effects, it false-alarmed in up to 81% of clean batches at a nominal 5%,
+  and 11–34% with 4 to 10 slides; from 12 slides, 4–9% (`experiments/tier2_reference_clusters.py`). `main` raises
+  an error in both cases (pass `allow_small_reference=True` to override). Tier 1 refuses settings in which it could
+  never flag: too few permutations for α, or too few samples or clusters for a permutation test to reach α.
 - **Validation so far.** Tier 1 has been checked on real tiles under the null (above; [record](https://github.com/athakur569/stainrob-benchmark/blob/c2a1d2706f1062fb76b7ea8e3db3639bdeb0f366/docs/research_log.md#iss-039--statistics--neighbouring-tiles-are-correlated)); Tier 2 and the
   conjunction rule have been tested on simulated data only. Detection of real, harmful shifts is the subject
   of ongoing work and is not yet demonstrated.

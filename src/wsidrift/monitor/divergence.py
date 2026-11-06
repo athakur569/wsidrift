@@ -209,6 +209,14 @@ class Tier1Monitor:
                 f"{1 / (self.n_permutations + 1):.4f}, not below alpha/2 = {self.alpha / 2:.4f}, so Tier 1 "
                 f"could never flag. Use at least {math.ceil(2 / self.alpha)} permutations."
             )
+        if groups is None:
+            # Tiny batches allow few distinct splits too (see the cluster check below).
+            distinct = math.comb(n + m, n) // (2 if n == m else 1)
+            if 1 / distinct >= self.alpha / 2:
+                raise ValueError(
+                    f"{n} reference and {m} deployment samples allow only {distinct} distinct splits, so Tier 1 "
+                    f"could never flag at alpha/2 = {self.alpha / 2:.4f}. Use more samples."
+                )
         rng = np.random.default_rng(self.seed)
         if groups is not None:
             if len(groups) != m:
@@ -261,7 +269,8 @@ class Tier1Monitor:
         }
         arrays = {"reference": self._reference}
         if self._ref_groups is not None:
-            arrays["groups"] = self._ref_groups
+            # As text: an object array (e.g. a pandas column's .to_numpy()) cannot be loaded without pickle.
+            arrays["groups"] = np.asarray(self._ref_groups).astype(str)
         with open(path, "wb") as f:
             np.savez(f, settings=json.dumps(settings), **arrays)
 

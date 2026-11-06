@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-message: "If you use wsidrift, please cite the version you used. The commit for each release is in the README."
+message: "If you use wsidrift, please cite the version you used. If you use the main branch, cite its commit hash as well, since main is ahead of the last release. The commit for each release is in the README."
 title: "wsidrift: a label-free validity monitor for computational pathology pipelines"
 type: software
 authors:

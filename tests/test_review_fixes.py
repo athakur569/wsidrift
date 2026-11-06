@@ -112,3 +112,44 @@ def test_delta_gap_sample_sd():
 
 def test_bonferroni_returns_decisions():
     assert bonferroni_correct([0.01, 0.03], alpha=0.05) == [True, False]
+
+
+class TestThirdReview:
+    """Second external review pass, 6 November 2026."""
+
+    @staticmethod
+    def _slides(k, per=25, d=3, seed=0):
+        r = np.random.default_rng(seed)
+        X = np.concatenate([r.normal(0, 1, d) + r.normal(0, 0.3, (per, d)) for _ in range(k)])
+        return X, np.repeat(np.arange(k), per)
+
+    def test_tier2_refuses_few_reference_clusters(self):
+        X, g = self._slides(11)
+        with pytest.raises(ValueError, match="at least 12"):
+            Tier2Monitor().fit(X, groups=g)
+
+    def test_tier2_twelve_clusters_enough(self):
+        X, g = self._slides(12)
+        Tier2Monitor().fit(X, groups=g)
+
+    def test_tier2_few_clusters_opt_in_and_fixed(self):
+        X, g = self._slides(4)
+        Tier2Monitor(allow_small_reference=True).fit(X, groups=g)
+        Tier2Monitor(maha_threshold=3.0).fit(X, groups=g)
+
+    def test_save_load_object_groups(self, tmp_path):
+        X, Y = _g(60, 4), _g(40, 4, 1)
+        gr = np.array([f"slide-{i // 6}" for i in range(60)], dtype=object)  # as pandas .to_numpy() gives
+        gd = np.array([f"dep-{i // 5}" for i in range(40)], dtype=object)
+        m = Tier1Monitor(n_permutations=99).fit(X, groups=gr)
+        m.save(tmp_path / "t1.npz")
+        r1, r2 = m.score(Y, groups=gd), Tier1Monitor.load(tmp_path / "t1.npz").score(Y, groups=gd)
+        assert (r1.p_mmd, r1.p_wass) == (r2.p_mmd, r2.p_wass)
+
+    @pytest.mark.parametrize("k", [2, 3, 4])
+    def test_tile_level_tiny_batches_refused(self, k):
+        with pytest.raises(ValueError, match="distinct splits"):
+            Tier1Monitor().fit(_g(k, 3)).score(_g(k, 3, 1, 50.0))
+
+    def test_tile_level_five_per_side_runs(self):
+        Tier1Monitor(n_permutations=199).fit(_g(5, 3)).score(_g(5, 3, 1, 50.0))

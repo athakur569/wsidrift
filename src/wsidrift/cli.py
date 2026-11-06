@@ -7,19 +7,26 @@ import json
 import sys
 
 
-def _load_features(path: str):
-    """Load an (n, d) feature matrix from .npy, or from comma-separated .csv (optional header row)."""
+def _load_features(path: str, header: str = "auto"):
+    """Load an (n, d) feature matrix from .npy, or from comma-separated .csv.
+
+    ``header``: "auto" skips the first row if it is not all numbers (so a numeric header such as
+    ``1,2,3`` is read as data), "yes" always skips it, "no" never does.
+    """
     import numpy as np
 
     if path.endswith(".npy"):
         return np.load(path)
-    with open(path) as f:
-        first = f.readline()
-    try:
-        [float(v) for v in first.strip().split(",")]
-        skip = 0
-    except ValueError:
-        skip = 1  # header row
+    if header == "auto":
+        with open(path) as f:
+            first = f.readline()
+        try:
+            [float(v) for v in first.strip().split(",")]
+            skip = 0
+        except ValueError:
+            skip = 1  # header row
+    else:
+        skip = 1 if header == "yes" else 0
     try:
         return np.loadtxt(path, delimiter=",", skiprows=skip, ndmin=2)
     except ValueError as e:
@@ -48,6 +55,8 @@ def main(argv: list[str] | None = None) -> None:
     score_p = sub.add_parser("score", help="Score a deployment batch against a reference")
     score_p.add_argument("--reference", required=True, help="Reference features .npy or .csv")
     score_p.add_argument("--deployment", required=True, help="Deployment features .npy or .csv")
+    score_p.add_argument("--header", choices=["auto", "yes", "no"], default="auto",
+                         help="CSV header row: auto (skip it if not all numbers), yes (always skip), no (never)")
     score_p.add_argument("--reference-groups", default=None,
                          help="Cluster id per reference row (e.g. slide), one per line; pass for tile-level data")
     score_p.add_argument("--deployment-groups", default=None,
@@ -66,8 +75,8 @@ def main(argv: list[str] | None = None) -> None:
         from wsidrift.monitor.validity_score import ValidityMonitor
 
         try:
-            X_ref = _load_features(args.reference)
-            X_dep = _load_features(args.deployment)
+            X_ref = _load_features(args.reference, args.header)
+            X_dep = _load_features(args.deployment, args.header)
             g_ref = _load_groups(args.reference_groups)
             g_dep = _load_groups(args.deployment_groups)
         except ValueError as e:

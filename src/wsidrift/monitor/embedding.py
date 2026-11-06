@@ -29,6 +29,7 @@ from ..guards import finite
 logger = logging.getLogger(__name__)
 
 _MIN_CROSSFIT = 40
+_MIN_CLUSTERS = 12  # reference clusters for calibrated thresholds with groups (experiments/tier2_reference_clusters.py)
 
 
 @dataclass
@@ -108,10 +109,13 @@ class Tier2Monitor:
         maha_threshold:   Fixed threshold on the batch-mean Mahalanobis distance.
         energy_threshold: Fixed threshold on batch-mean energy; flags when exceeded.
         seed:             Seed for cross-fitting and bootstrap.
-        allow_small_reference: Calibrate on fewer than 40 reference samples anyway. Below 40 the
-                          reference distances are in-sample, so the threshold is too low and the
-                          false-alarm rate is far above ``alpha`` (at alpha = 0.05 and n = 30:
-                          59% in 5 dimensions, 100% in 16).
+        allow_small_reference: Calibrate on a reference too small to calibrate on, anyway: fewer than
+                          40 samples, or, with ``groups``, fewer than 12 clusters. Below 40 samples the
+                          reference distances are in-sample and the false-alarm rate is far above
+                          ``alpha`` (50–100% at alpha = 0.05; experiments/tier2_reference_size.py).
+                          With fewer than 12 clusters, the half-models and the cluster bootstrap rest
+                          on a few slides; with strong slide effects the rate reached 81% at a nominal
+                          5%, and 11–34% with 4 to 10 slides (experiments/tier2_reference_clusters.py).
                           Off by default: ``fit`` raises instead. Not needed with a fixed
                           ``maha_threshold``.
     """
@@ -153,6 +157,15 @@ class Tier2Monitor:
             raise ValueError("groups must have one entry per reference sample")
         if self._ref_groups is not None and len(np.unique(self._ref_groups)) < 2:
             raise ValueError("groups: need at least 2 reference clusters; with one, the cluster split has an empty half")
+        if self._ref_groups is not None and self.maha_threshold is None and not self.allow_small_reference:
+            k = len(np.unique(self._ref_groups))
+            if k < _MIN_CLUSTERS:
+                raise ValueError(
+                    f"Tier2Monitor: {k} reference clusters; calibrated thresholds with groups need at least "
+                    f"{_MIN_CLUSTERS}. With fewer, the threshold rests on a few slides and false-alarms far above "
+                    "alpha. Add reference slides, pass a fixed maha_threshold, or pass allow_small_reference=True "
+                    "to accept this."
+                )
         self._mu, self._precision = _fit_gaussian(Z)
 
         self._folds = None

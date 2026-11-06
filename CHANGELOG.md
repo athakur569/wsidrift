@@ -2,6 +2,21 @@
 
 ## Unreleased (0.1.2.dev0)
 
+### Fixed (second external review pass, 6 November 2026)
+- **Tier 2 with groups and few reference clusters** false-alarmed far above `alpha` without a warning: with strong
+  slide effects and no shift, up to 81% at a nominal 5% below 12 reference slides, 11–34% with 4 to 10
+  (`experiments/tier2_reference_clusters.py`). `fit` now raises below 12 reference clusters, with the same overrides
+  as below 40 samples (`allow_small_reference=True`, or a fixed `maha_threshold`).
+- **`Tier1Monitor.load` failed on groups saved from an object array** (what a pandas column's `.to_numpy()` gives):
+  "Object arrays cannot be loaded when allow_pickle=False". `save` now stores groups as text; scores are unchanged.
+- **Tile-level Tier 1 with tiny batches** (2–4 samples a side) could never flag and was not refused. It now raises when
+  the number of distinct splits cannot give a p-value below α/2, as the cluster test already did.
+- `wsidrift score --header auto|yes|no`: a CSV whose header row is all numbers (e.g. `1,2,3`) was read as data; pass
+  `--header yes` for such files. The default (auto) is unchanged.
+
+### Added (6 November 2026)
+- `tools/verify_pypi_release.py VERSION`: compares a PyPI release's source with its tag, file for file.
+
 ### Fixed (external review, 5 November 2026)
 - **Tier 2 below 40 reference samples** set its threshold on in-sample distances and false-alarmed in 50–100% of
   clean batches at a nominal 5% (50–71% in 5 dimensions with 20–30 samples, 100% in 16, two-sided;

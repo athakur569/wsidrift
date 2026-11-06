@@ -65,3 +65,10 @@ def test_groups_flags_go_together(tmp_path):
     (tmp_path / "g.txt").write_text("\n".join("a b" .split() * 5))
     with pytest.raises(SystemExit, match="together"):
         main(["score", "--reference", X, "--deployment", X, "--reference-groups", str(tmp_path / "g.txt")])
+
+
+@pytest.mark.parametrize("header,rows", [("auto", 4), ("yes", 3), ("no", 4)])
+def test_numeric_header_choices(tmp_path, header, rows):
+    path = tmp_path / "x.csv"
+    path.write_text("1,2,3\n4,5,6\n7,8,9\n1,1,1\n")
+    assert _load_features(str(path), header).shape == (rows, 3)
