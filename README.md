@@ -4,7 +4,7 @@ A label-free, model-agnostic validity monitor for deployed computational patholo
 
 It compares a batch of deployment data with a validated reference batch and flags when the batch has shifted, without needing labels or access to the model's internals beyond embeddings.
 
-> **Status: pre-alpha (0.1.2).** The monitors are implemented and tested on synthetic data; Tier 1 has also been checked on real whole-slide-image tiles with no shift (see Limitations). Detection of real, harmful shifts has **not** yet been demonstrated, and the flag is not yet linked to measured performance loss. Don't use it for clinical decisions.
+> **Status: pre-alpha (0.1.2).** The monitors are implemented and tested on synthetic data; Tier 1 has also been checked on real whole-slide-image tiles with no shift; with slide groups it stayed within its nominal false-alarm rate (see Limitations). Detection of real, harmful shifts has **not** yet been demonstrated, and the flag is not yet linked to measured performance loss. Don't use it for clinical decisions.
 
 ## How it works
 
@@ -106,17 +106,17 @@ Until a number has a script, treat it as reported, not reproducible from this re
 - **Correlated samples (important).** Tiles from one slide resemble each other. Release 0.1.1 permutes and
   bootstraps single tiles, which treats them as independent: on real CAMELYON17 tiles with no shift at all
   (training slides split into two random halves), Tier 1 alarmed in 82% (pixel statistics) and 100%
-  (DenseNet-121 features) of 40 splits at a nominal 10%. The main branch adds `groups` (one slide or patient id
-  per sample) to `fit` and `score`; with slide groups the same check alarmed in 5% and 2%. Pass `groups` for
-  any tile-level data. Fixed in 0.1.2.
-- **Bad input in 0.1.1.** The PyPI release does not check for NaN or infinite values, and one such value decides the
+  (DenseNet-121 features) of 40 splits at a nominal 10%. From 0.1.2, `fit` and `score` take `groups` (one slide
+  or patient id per sample); with slide groups the same check alarmed in 5% and 2%. Pass `groups` for any
+  tile-level data.
+- **Bad input in 0.1.1.** Release 0.1.1 does not check for NaN or infinite values, and one such value decides the
   result. In Tier 1 it gives a NaN statistic and the smallest possible p-value, so the batch is flagged whatever the data
   show. In Tier 2 it gives a NaN mean distance that never flags, so the AND rule stays silent even on a clear shift. With
   0.1.1, check your features with `numpy.isfinite` before calling `score`. From 0.1.2 the monitors refuse such input and name the rows.
 - **Shifts that shrink the spread: fixed in 0.1.2, not in 0.1.1.** In 0.1.1, Tier 2 flags only when distances from
   the reference grow. Deployment embeddings that are less spread out than the reference (pulled toward its mean, as
   blank or blurred tiles might be) never trip it, so the default AND flag never fires either, whatever Tier 1 sees.
-  On `main`, Tier 2's Mahalanobis check is two-sided, each tail at half its share of α. Synthetic check (64
+  From 0.1.2, Tier 2's Mahalanobis check is two-sided, each tail at half its share of α. Synthetic check (64
   dimensions, 500 reference samples, batches of 100, α = 0.05, 200 runs; `experiments/and_rule_power.py`): spread
   × 0.8, × 0.5 and × 0.01 are flagged by Tier 1 in 100% of runs and by the AND rule in 100%, against 0% under the
   one-sided rule. With 0.1.1, read Tier 1 and Tier 2 separately, or use `require_both=False`.
@@ -128,7 +128,7 @@ Until a number has a script, treat it as reported, not reproducible from this re
   out of sample; below that it false-alarmed in 50–71% of clean batches in 5 dimensions and 100% in 16, at a
   nominal 5% (`experiments/tier2_reference_size.py`). With `groups`, it also needs at least 12 reference clusters
   (slides): with fewer, and strong slide effects, it false-alarmed in up to 81% of clean batches at a nominal 5%,
-  and 11–34% with 4 to 10 slides; from 12 slides, 4–9% (`experiments/tier2_reference_clusters.py`). `main` raises
+  and 11–34% with 4 to 10 slides; from 12 slides, 4–9% (`experiments/tier2_reference_clusters.py`). 0.1.2 raises
   an error in both cases (pass `allow_small_reference=True` to override). Tier 1 refuses settings in which it could
   never flag: too few permutations for α, or too few samples or clusters for a permutation test to reach α.
 - **Validation so far.** Tier 1 has been checked on real tiles under the null (above; [record](https://github.com/athakur569/stainrob-benchmark/blob/c2a1d2706f1062fb76b7ea8e3db3639bdeb0f366/docs/research_log.md#iss-039--statistics--neighbouring-tiles-are-correlated)); Tier 2 and the
