@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (0.1.2.dev0)
+## 0.1.2 — 8 November 2026 — pre-alpha
 
 ### Fixed (second external review pass, 6 November 2026)
 - **Tier 2 with groups and few reference clusters** false-alarmed far above `alpha` without a warning: with strong

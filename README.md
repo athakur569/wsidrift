@@ -4,7 +4,7 @@ A label-free, model-agnostic validity monitor for deployed computational patholo
 
 It compares a batch of deployment data with a validated reference batch and flags when the batch has shifted, without needing labels or access to the model's internals beyond embeddings.
 
-> **Status: pre-alpha.** PyPI has 0.1.1; `main` is 0.1.2.dev0 and differs from it (see [Versions](#versions-and-where-each-number-comes-from)). The monitors are implemented and tested on synthetic data only. They have **not** been validated on whole-slide-image data, and the flag is not yet linked to measured performance loss. Don't use it for clinical decisions.
+> **Status: pre-alpha (0.1.2).** The monitors are implemented and tested on synthetic data; Tier 1 has also been checked on real whole-slide-image tiles with no shift (see Limitations). Detection of real, harmful shifts has **not** yet been demonstrated, and the flag is not yet linked to measured performance loss. Don't use it for clinical decisions.
 
 ## How it works
 
@@ -82,11 +82,11 @@ On synthetic Gaussian data at α = 0.05 (16 dimensions, 1,000 fresh reference se
 |---|---|---|
 | 0.1.0 (PyPI, tag `v0.1.0`) | `10d4e42` | The uploaded source matches this commit file for file. |
 | 0.1.1 (PyPI, tag `v0.1.1`) | `b85875f` | The uploaded source matches this commit file for file. The commit titled "release: 0.1.1" (`4db4e95`) is four commits earlier. |
+| 0.1.2 (PyPI, tag `v0.1.2`) | the tagged commit | Adds `groups`, input guards, the two-sided Tier 2 and the other fixes in the CHANGELOG. |
 
-Check either release yourself with `python tools/verify_pypi_release.py 0.1.1` (from a clone with tags): it downloads
-the source archive from PyPI and compares it with the tagged commit file for file. If you use `main`, cite its commit
-hash as well as the version, since `main` is ahead of the last release.
-| 0.1.2.dev0 (`main`) | — | Adds `groups`, input guards and the fixes in the CHANGELOG. Not on PyPI. |
+Check any release yourself with `python tools/verify_pypi_release.py 0.1.2` (from a clone with tags): it downloads
+the source archive from PyPI and compares it with the tagged commit file for file. If you use `main` after a release,
+cite its commit hash as well as the version.
 
 | Number | Where | First reported in | Script |
 |---|---|---|---|
@@ -108,13 +108,12 @@ Until a number has a script, treat it as reported, not reproducible from this re
   (training slides split into two random halves), Tier 1 alarmed in 82% (pixel statistics) and 100%
   (DenseNet-121 features) of 40 splits at a nominal 10%. The main branch adds `groups` (one slide or patient id
   per sample) to `fit` and `score`; with slide groups the same check alarmed in 5% and 2%. Pass `groups` for
-  any tile-level data. Not yet released on PyPI.
+  any tile-level data. Fixed in 0.1.2.
 - **Bad input in 0.1.1.** The PyPI release does not check for NaN or infinite values, and one such value decides the
   result. In Tier 1 it gives a NaN statistic and the smallest possible p-value, so the batch is flagged whatever the data
   show. In Tier 2 it gives a NaN mean distance that never flags, so the AND rule stays silent even on a clear shift. With
-  0.1.1, check your features with `numpy.isfinite` before calling `score`. `main` refuses such input and names the rows.
-  Not yet released on PyPI.
-- **Shifts that shrink the spread: fixed on `main`, not in 0.1.1.** In 0.1.1, Tier 2 flags only when distances from
+  0.1.1, check your features with `numpy.isfinite` before calling `score`. From 0.1.2 the monitors refuse such input and name the rows.
+- **Shifts that shrink the spread: fixed in 0.1.2, not in 0.1.1.** In 0.1.1, Tier 2 flags only when distances from
   the reference grow. Deployment embeddings that are less spread out than the reference (pulled toward its mean, as
   blank or blurred tiles might be) never trip it, so the default AND flag never fires either, whatever Tier 1 sees.
   On `main`, Tier 2's Mahalanobis check is two-sided, each tail at half its share of α. Synthetic check (64

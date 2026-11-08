@@ -6,8 +6,9 @@ wsidrift is a label-free, model-agnostic validity monitor for deployed computati
 pathology pipelines. It sits between image ingestion and the downstream diagnostic model,
 certifying whether the current batch of slides is within the validated operating envelope.
 
-> **Status (pre-alpha; PyPI 0.1.1, `main` 0.1.2.dev0):** the Tier 1 and Tier 2 monitors and the conjunction rule are
-> implemented and tested on synthetic data only. They have not been validated on WSI data.
+> **Status (pre-alpha, 0.1.2):** the Tier 1 and Tier 2 monitors and the conjunction rule are
+> implemented and tested on synthetic data; Tier 1 has also been checked on real WSI tiles with no shift.
+> Detection of real, harmful shifts has not yet been demonstrated.
 > The divergence–ΔG relationship is not implemented. Model training (E1–E9) lives in the
 > [stainrob-benchmark](https://github.com/athakur569/stainrob-benchmark) research repository, not in this package.
 

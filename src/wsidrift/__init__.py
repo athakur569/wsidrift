@@ -4,5 +4,5 @@ from .monitor.divergence import Tier1Monitor
 from .monitor.embedding import Tier2Monitor
 from .monitor.validity_score import ValidityMonitor
 
-__version__ = "0.1.2.dev0"
+__version__ = "0.1.2"
 __all__ = ["Tier1Monitor", "Tier2Monitor", "ValidityMonitor"]

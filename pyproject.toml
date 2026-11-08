@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wsidrift"
-version = "0.1.2.dev0"
+version = "0.1.2"
 description = "Label-free validity monitor for computational pathology pipelines"
 readme = "README.md"
 license = "MIT"
